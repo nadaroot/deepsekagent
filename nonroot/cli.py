@@ -8,10 +8,31 @@ import time
 import argparse
 import webbrowser
 import subprocess
+import threading
+import logging
 from pathlib import Path
 
 from nonroot.config import config_manager
 from nonroot.server import start_server
+
+# Setup nonroot logging
+log_dir = Path.home() / ".nonroot"
+log_dir.mkdir(parents=True, exist_ok=True)
+log_file = log_dir / "nonroot.log"
+
+logging.basicConfig(
+    filename=str(log_file),
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+
+def safe_print(*args, **kwargs):
+    try:
+        print(*args, **kwargs)
+        sys.stdout.flush()
+    except Exception:
+        pass
+    logging.info(" ".join(str(a) for a in args))
 
 def launch_app_in_browser(url: str):
     """Launches Chrome/Chromium in borderless app mode if available, or default browser."""
@@ -70,66 +91,74 @@ def launch_app_in_browser(url: str):
             pass
 
 def main():
-    parser = argparse.ArgumentParser(
-        prog="nonroot",
-        description="NonRoot — Autonomous AI Agent (OpenCode 1:1 Aesthetic)"
-    )
-    parser.add_argument("--port", type=int, default=8765, help="Port to bind web server (default: 8765)")
-    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address (default: 127.0.0.1)")
-    parser.add_argument("--workspace", type=str, default=None, help="Root workspace directory")
-    parser.add_argument("--model", type=str, default=None, help="DeepSeek model (deepseek-chat, deepseek-reasoner)")
-    parser.add_argument("--api-url", type=str, default=None, help="DeepSeek API Base URL")
-    parser.add_argument("--api-key", type=str, default=None, help="API Key")
-    parser.add_argument("--no-browser", action="store_true", help="Do not open browser automatically")
-    parser.add_argument("--auto-accept", action="store_true", help="Enable auto-accept tool execution")
+    try:
+        parser = argparse.ArgumentParser(
+            prog="nonroot",
+            description="NonRoot — Autonomous AI Agent (OpenCode 1:1 Aesthetic)"
+        )
+        parser.add_argument("--port", type=int, default=8765, help="Port to bind web server (default: 8765)")
+        parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address (default: 127.0.0.1)")
+        parser.add_argument("--workspace", type=str, default=None, help="Root workspace directory")
+        parser.add_argument("--model", type=str, default=None, help="DeepSeek model (deepseek-chat, deepseek-reasoner)")
+        parser.add_argument("--api-url", type=str, default=None, help="DeepSeek API Base URL")
+        parser.add_argument("--api-key", type=str, default=None, help="API Key")
+        parser.add_argument("--no-browser", action="store_true", help="Do not open browser automatically")
+        parser.add_argument("--auto-accept", action="store_true", help="Enable auto-accept tool execution")
 
-    args = parser.parse_args()
+        args = parser.parse_args()
 
-    # Update config from CLI flags
-    updates = {}
-    if args.workspace:
-        updates["workspace"] = str(Path(args.workspace).resolve())
-    if args.model:
-        updates["model"] = args.model
-    if args.api_url:
-        updates["api_base_url"] = args.api_url
-    if args.api_key:
-        updates["api_key"] = args.api_key
-    if args.auto_accept:
-        updates["auto_accept_tools"] = True
+        # Update config from CLI flags
+        updates = {}
+        if args.workspace:
+            updates["workspace"] = str(Path(args.workspace).resolve())
+        if args.model:
+            updates["model"] = args.model
+        if args.api_url:
+            updates["api_base_url"] = args.api_url
+        if args.api_key:
+            updates["api_key"] = args.api_key
+        if args.auto_accept:
+            updates["auto_accept_tools"] = True
 
-    if updates:
-        config_manager.update(updates)
+        if updates:
+            config_manager.update(updates)
 
-    port = args.port or config_manager.get("port", 8765)
-    host = args.host
+        port = args.port or config_manager.get("port", 8765)
+        host = args.host
 
-    server, actual_port = start_server(port=port, host=host)
-    url = f"http://{host}:{actual_port}"
+        server, actual_port = start_server(port=port, host=host)
+        url = f"http://{host}:{actual_port}"
 
-    print(r'''
+        safe_print(r'''
   _  _           ___            _   
  | \| |___ _ _  | _ \___  ___ _| |_ 
  | .` / _ \ ' \ |   / _ \/ _ \  _|
  |_|\_\___/_||_||_|_\___/\___/\__|
  Autonomous AI Agent Engine · v1.0.0
-    ''')
-    print(f"[*] Workspace: {config_manager.get('workspace')}")
-    print(f"[*] Model: {config_manager.get('model')}")
-    print(f"[*] Server running at: {url}")
+        ''')
+        safe_print(f"[*] Workspace: {config_manager.get('workspace')}")
+        safe_print(f"[*] Model: {config_manager.get('model')}")
+        safe_print(f"[*] Server running at: {url}")
 
-    if not args.no_browser:
-        time.sleep(0.3)
-        launch_app_in_browser(url)
+        if not args.no_browser:
+            time.sleep(0.3)
+            launch_app_in_browser(url)
 
-    print("[+] NonRoot is active. Press Ctrl+C to stop.\n")
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\n[*] Shutting down NonRoot...")
-        server.shutdown()
+        safe_print("[+] NonRoot is active. Press Ctrl+C to stop.\n")
+        
+        shutdown_event = threading.Event()
+        try:
+            shutdown_event.wait()
+        except (KeyboardInterrupt, SystemExit):
+            safe_print("\n[*] Shutting down NonRoot...")
+            server.shutdown()
+
+    except Exception as e:
+        logging.exception("Fatal error in NonRoot main()")
+        safe_print(f"[-] Fatal error: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
+
 

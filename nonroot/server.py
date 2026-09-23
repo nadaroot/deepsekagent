@@ -65,6 +65,8 @@ active_agent = AutonomousAgent(
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
+    allow_reuse_address = True
+
 
 class NonRootHTTPHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
