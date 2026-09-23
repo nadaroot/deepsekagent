@@ -10,37 +10,47 @@ import urllib.request
 import urllib.error
 from typing import Generator, Dict, Any, List, Optional
 
+DEEPSEEK_MODELS = [
+    {"id": "deepseek-chat", "name": "DeepSeek Chat (V3)", "desc": "Официальная флагманская модель DeepSeek-V3", "group": "Официальные"},
+    {"id": "deepseek-reasoner", "name": "DeepSeek Reasoner (R1)", "desc": "Официальная reasoning-модель R1 с процессом мышления", "group": "Официальные"},
+    {"id": "deepseek-coder", "name": "DeepSeek Coder (33B)", "desc": "Специализированная кодинг-модель", "group": "Официальные"},
+    {"id": "deepseek-ai/DeepSeek-V3", "name": "DeepSeek-V3 (SiliconFlow/Router)", "desc": "DeepSeek V3 через роутер/провайдеры", "group": "Роутеры"},
+    {"id": "deepseek-ai/DeepSeek-R1", "name": "DeepSeek-R1 (SiliconFlow/Router)", "desc": "DeepSeek R1 через роутер/провайдеры", "group": "Роутеры"},
+    {"id": "deepseek-v3", "name": "deepseek-v3 (Alias)", "desc": "Короткий алиас DeepSeek V3", "group": "Алиасы"},
+    {"id": "deepseek-r1", "name": "deepseek-r1 (Alias)", "desc": "Короткий алиас DeepSeek R1", "group": "Алиасы"},
+    {"id": "deepseek-coder-33b-instruct", "name": "DeepSeek Coder 33B Instruct", "desc": "Инструкт-версия Coder 33B", "group": "Кодеры"},
+    {"id": "deepseek-coder-6.7b-instruct", "name": "DeepSeek Coder 6.7B Instruct", "desc": "Быстрая легкая версия кодера", "group": "Кодеры"},
+    {"id": "deepseek-math-7b-instruct", "name": "DeepSeek Math 7B", "desc": "Математическая логика и формулы", "group": "Специализированные"}
+]
+
 class DeepSeekClient:
     def __init__(self, api_base_url: str = "http://127.0.0.1:3000/v1", api_key: str = "sk-nonroot-free"):
         self.api_base_url = api_base_url.rstrip("/")
         self.api_key = api_key or "sk-nonroot-free"
 
     def list_models(self) -> List[Dict[str, Any]]:
-        models = [
-            {"id": "deepseek-chat", "name": "DeepSeek Chat (V3)", "desc": "Быстрая и мощная модель для разработки и диалогов", "vision": True},
-            {"id": "deepseek-reasoner", "name": "DeepSeek Reasoner (R1)", "desc": "Глубокое логическое мышление с выводом процесса рассуждений <think>", "vision": True},
-            {"id": "deepseek-coder", "name": "DeepSeek Coder", "desc": "Специализированная модель для кодинга и архитектуры", "vision": True}
-        ]
+        models = list(DEEPSEEK_MODELS)
         try:
             url = f"{self.api_base_url}/models"
             req = urllib.request.Request(url, headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "User-Agent": "NonRoot/1.0"
             })
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=4) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 remote_models = data.get("data", [])
                 if remote_models:
-                    custom = []
+                    existing_ids = {m["id"] for m in models}
                     for m in remote_models:
                         m_id = m.get("id", "")
-                        custom.append({
-                            "id": m_id,
-                            "name": m.get("name", m_id),
-                            "desc": m.get("description", "Доступная модель API"),
-                            "vision": True
-                        })
-                    return custom
+                        if m_id and m_id not in existing_ids:
+                            models.append({
+                                "id": m_id,
+                                "name": m.get("name", m_id),
+                                "desc": m.get("description", "API Модель"),
+                                "group": "Доступные из API"
+                            })
+                            existing_ids.add(m_id)
         except Exception:
             pass
         return models
@@ -53,14 +63,6 @@ class DeepSeekClient:
         tools: Optional[List[Dict[str, Any]]] = None,
         images: Optional[List[str]] = None
     ) -> Generator[Dict[str, Any], None, None]:
-        """
-        Yields structured SSE chunks:
-        - {"type": "reasoning", "content": "..."}
-        - {"type": "content", "content": "..."}
-        - {"type": "tool_call", "tool_call": {...}}
-        - {"type": "done", "finish_reason": "..."}
-        - {"type": "error", "message": "..."}
-        """
         url = f"{self.api_base_url}/chat/completions"
         
         # Prepare messages payload
@@ -80,7 +82,6 @@ class DeepSeekClient:
             else:
                 payload_messages.append({"role": role, "content": content})
 
-        # Inject standalone images into the latest user message if provided
         if images and payload_messages:
             last_msg = payload_messages[-1]
             if last_msg["role"] == "user":
@@ -131,15 +132,12 @@ class DeepSeekClient:
                         continue
                     delta = choices[0].get("delta", {})
 
-                    # 1. Reasoning content (DeepSeek R1 / reasoner field)
                     reasoning = delta.get("reasoning_content") or delta.get("reasoning")
                     if reasoning:
                         yield {"type": "reasoning", "content": reasoning}
 
-                    # 2. Main content tokens
                     content = delta.get("content", "")
                     if content:
-                        # Also handle inline <think> and </think> tags
                         if "<think>" in content:
                             in_think_block = True
                             parts = content.split("<think>", 1)
@@ -163,7 +161,6 @@ class DeepSeekClient:
                         else:
                             yield {"type": "content", "content": content}
 
-                    # 3. Tool Calls (OpenAI format delta)
                     tool_calls_delta = delta.get("tool_calls", [])
                     for tc in tool_calls_delta:
                         idx = tc.get("index", 0)
@@ -180,7 +177,6 @@ class DeepSeekClient:
 
                     finish_reason = choices[0].get("finish_reason")
                     if finish_reason:
-                        # Flush any tool calls
                         for tc_data in current_tool_calls.values():
                             try:
                                 parsed_args = json.loads(tc_data["arguments"])
