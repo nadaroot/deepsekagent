@@ -25,8 +25,26 @@ Current workspace root: {workspace}
 5. `list_dir(path: str = ".")`: List directory tree structure.
 6. `grep_search(query: str, path: str = ".", is_regex: bool = False)`: Search text patterns across files.
 7. `web_fetch(url: str)`: Fetch web page text or documentation in markdown format.
-8. `spawn_subagent(role: str, prompt: str, model: str = None)`: Spawn an autonomous subagent for a distinct subtask.
-9. `finish_task(summary: str)`: Signal that the task is fully accomplished with a final summary in Russian.
+8. `browser_open(url: str)`: Open a web page in the embedded Chromium browser and capture a live screenshot.
+9. `browser_click(x: int = None, y: int = None, selector: str = None, description: str = "Клик")`: Click coordinates or element with visible AI cursor.
+10. `browser_type(text: str, selector: str = None, press_enter: bool = False)`: Type text into an element or the page.
+11. `browser_scroll(direction: str = "down", amount: int = 500)`: Scroll the page up/down.
+12. `browser_screenshot(full_page: bool = False)`: Capture screenshot of the browser view for visual inspection.
+13. `browser_inspect(selector: str = None)`: Extract DOM structure, interactive elements, coordinates and styles.
+14. `browser_clone_site(url: str = None, output_folder: str = "cloned_site")`: Automatically clone a website 1:1, downloading HTML, CSS, images and fonts into the project.
+15. `spawn_subagent(role: str, prompt: str, model: str = None)`: Spawn an autonomous subagent for a distinct subtask.
+16. `finish_task(summary: str)`: Signal that the task is fully accomplished with a final summary in Russian.
+
+### Built-in Chromium Browser & AI Cursor:
+You have a real-time embedded Chromium browser displayed on the right panel.
+When you perform browser actions (`browser_open`, `browser_click`, `browser_type`, `browser_scroll`), the user sees your animated AI cursor and actions live.
+
+### 1:1 Website Cloning Workflow (Клонирование сайта 1 в 1):
+When asked to clone or copy a website:
+1. **Visual Reconnaissance**: Call `browser_open(url)` to load the site into the browser, view the screenshot, inspect the layout, fonts, colors, and structure.
+2. **Asset & Structure Extraction**: Call `browser_clone_site(url=url, output_folder="cloned_site")` to automatically dump HTML, CSS, images, and fonts into a project folder.
+3. **Refine & Polish**: Open the local copy `file://...` via `browser_open`, verify the screenshot visually against the original, and edit `index.html` or `style.css` using `edit_file` to ensure exact 1:1 visual match.
+4. **Finish**: Conclude with `finish_task` summarizing the created files.
 """
 
 TOOL_DEFINITIONS = [
@@ -149,6 +167,104 @@ TOOL_DEFINITIONS = [
                     "model": {"type": "string", "description": "Optional model override"}
                 },
                 "required": ["role", "prompt"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_open",
+            "description": "Open a website in the embedded Chromium browser and return live screenshot and title",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL of the website to open (e.g. https://example.com or local file://)"}
+                },
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_click",
+            "description": "Click on the page at specific coordinates (x, y) or CSS selector with visible AI cursor",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "x": {"type": "integer", "description": "X coordinate in pixels"},
+                    "y": {"type": "integer", "description": "Y coordinate in pixels"},
+                    "selector": {"type": "string", "description": "Optional CSS selector to click"},
+                    "description": {"type": "string", "description": "Short description of the element being clicked for the AI cursor badge"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_type",
+            "description": "Type text into the currently focused element or specified CSS selector",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "Text to type"},
+                    "selector": {"type": "string", "description": "Optional CSS selector to target"},
+                    "press_enter": {"type": "boolean", "description": "Whether to press Enter key after typing"}
+                },
+                "required": ["text"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_scroll",
+            "description": "Scroll the page up or down",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "direction": {"type": "string", "enum": ["down", "up"], "description": "Scroll direction, default down"},
+                    "amount": {"type": "integer", "description": "Pixel amount to scroll, default 500"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_screenshot",
+            "description": "Take a high-resolution screenshot of the browser view for visual inspection",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "full_page": {"type": "boolean", "description": "Whether to capture full scrollable page"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_inspect",
+            "description": "Extract semantic DOM layout, interactive elements, coordinates, and computed styles",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_clone_site",
+            "description": "Automatically clone website 1:1, downloading HTML, CSS stylesheets, images and fonts into a clean local project",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Target website URL to clone"},
+                    "output_folder": {"type": "string", "description": "Folder name in workspace to save the cloned project, default cloned_site"}
+                }
             }
         }
     },

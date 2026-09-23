@@ -5,6 +5,7 @@ Tool Implementations for NonRoot Autonomous Agent.
 import os
 import sys
 import re
+import json
 import subprocess
 import urllib.request
 from pathlib import Path
@@ -243,6 +244,100 @@ class ToolExecutor:
             }
         except Exception as e:
             return {"success": False, "error": f"Failed to fetch URL: {str(e)}", "output": ""}
+
+    def tool_browser_open(self, url: str) -> Dict[str, Any]:
+        from nonroot.browser.manager import get_browser_manager
+        bm = get_browser_manager()
+        res = bm.navigate(url)
+        if res.get("success"):
+            return {
+                "success": True,
+                "output": f"Открыта страница в Chromium: {res.get('title')} ({res.get('url')})",
+                "url": res.get("url"),
+                "title": res.get("title"),
+                "screenshot": res.get("screenshot_b64")
+            }
+        return {"success": False, "error": res.get("error", "Failed to navigate")}
+
+    def tool_browser_click(self, x: Optional[int] = None, y: Optional[int] = None, selector: Optional[str] = None, description: str = "Клик") -> Dict[str, Any]:
+        from nonroot.browser.manager import get_browser_manager
+        bm = get_browser_manager()
+        res = bm.click(x=x, y=y, selector=selector, description=description)
+        if res.get("success"):
+            return {
+                "success": True,
+                "output": f"Выполнен клик: {res.get('clicked_at')} на странице '{res.get('title')}'",
+                "screenshot": res.get("screenshot_b64")
+            }
+        return {"success": False, "error": res.get("error", "Click failed")}
+
+    def tool_browser_type(self, text: str, selector: Optional[str] = None, press_enter: bool = False) -> Dict[str, Any]:
+        from nonroot.browser.manager import get_browser_manager
+        bm = get_browser_manager()
+        res = bm.type_text(text=text, selector=selector, press_enter=press_enter)
+        if res.get("success"):
+            return {
+                "success": True,
+                "output": f"Введен текст: '{text}' (Enter: {press_enter})",
+                "screenshot": res.get("screenshot_b64")
+            }
+        return {"success": False, "error": res.get("error", "Type failed")}
+
+    def tool_browser_scroll(self, direction: str = "down", amount: int = 500) -> Dict[str, Any]:
+        from nonroot.browser.manager import get_browser_manager
+        bm = get_browser_manager()
+        res = bm.scroll(direction=direction, amount=amount)
+        if res.get("success"):
+            return {
+                "success": True,
+                "output": f"Прокрутка страницы {direction} на {amount}px",
+                "screenshot": res.get("screenshot_b64")
+            }
+        return {"success": False, "error": res.get("error", "Scroll failed")}
+
+    def tool_browser_screenshot(self, full_page: bool = False) -> Dict[str, Any]:
+        from nonroot.browser.manager import get_browser_manager
+        bm = get_browser_manager()
+        res = bm.take_screenshot(full_page=full_page)
+        if res.get("success"):
+            return {
+                "success": True,
+                "output": f"Скриншот успешно получен для {res.get('title')} ({res.get('url')})",
+                "screenshot": res.get("screenshot_b64")
+            }
+        return {"success": False, "error": res.get("error", "Screenshot failed")}
+
+    def tool_browser_inspect(self, selector: Optional[str] = None) -> Dict[str, Any]:
+        from nonroot.browser.manager import get_browser_manager
+        bm = get_browser_manager()
+        res = bm.get_dom_summary()
+        if res.get("success"):
+            dom = res.get("dom", {})
+            return {
+                "success": True,
+                "output": f"DOM структура: {dom.get('title')} ({dom.get('url')}), элементов: {dom.get('element_count')}\n" +
+                          json.dumps(dom.get("interactive", [])[:35], ensure_ascii=False, indent=2)
+            }
+        return {"success": False, "error": res.get("error", "Inspect failed")}
+
+    def tool_browser_clone_site(self, url: Optional[str] = None, output_folder: str = "cloned_site") -> Dict[str, Any]:
+        from nonroot.browser.cloner import SiteCloner
+        from nonroot.browser.manager import get_browser_manager
+        bm = get_browser_manager()
+        target_url = url or bm.current_url
+        if not target_url or target_url == "about:blank":
+            return {"success": False, "error": "Не указан URL для клонирования"}
+
+        cloner = SiteCloner(workspace=self.workspace)
+        res = cloner.clone(url=target_url, output_folder=output_folder)
+        if res.get("success"):
+            return {
+                "success": True,
+                "output": res.get("message"),
+                "target_dir": res.get("target_dir"),
+                "index_html": res.get("index_html")
+            }
+        return {"success": False, "error": res.get("error", "Clone failed")}
 
     def tool_finish_task(self, summary: str) -> Dict[str, Any]:
         return {

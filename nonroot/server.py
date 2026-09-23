@@ -283,6 +283,15 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
             self._send_json({"subagents": active_agent.subagent_manager.list_all()})
             return
 
+        if path == "/api/browser/state":
+            try:
+                from nonroot.browser.manager import get_browser_manager
+                bm = get_browser_manager(on_event=broadcaster.broadcast)
+                self._send_json(bm.get_state())
+            except Exception as e:
+                self._send_json({"error": str(e), "url": "about:blank"})
+            return
+
         if path == "/api/workspace":
             try:
                 files = []
@@ -455,6 +464,71 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
             raw_token = body.get("token", "")
             res = save_custom_token(raw_token)
             self._send_json(res)
+            return
+
+        if path == "/api/browser/navigate":
+            try:
+                from nonroot.browser.manager import get_browser_manager
+                bm = get_browser_manager(on_event=broadcaster.broadcast)
+                url = body.get("url", "https://google.com")
+                res = bm.navigate(url)
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)})
+            return
+
+        if path == "/api/browser/click":
+            try:
+                from nonroot.browser.manager import get_browser_manager
+                bm = get_browser_manager(on_event=broadcaster.broadcast)
+                res = bm.click(x=body.get("x"), y=body.get("y"), selector=body.get("selector"), description=body.get("description", "Клик"))
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)})
+            return
+
+        if path == "/api/browser/type":
+            try:
+                from nonroot.browser.manager import get_browser_manager
+                bm = get_browser_manager(on_event=broadcaster.broadcast)
+                res = bm.type_text(text=body.get("text", ""), selector=body.get("selector"), press_enter=body.get("press_enter", False))
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)})
+            return
+
+        if path == "/api/browser/scroll":
+            try:
+                from nonroot.browser.manager import get_browser_manager
+                bm = get_browser_manager(on_event=broadcaster.broadcast)
+                res = bm.scroll(direction=body.get("direction", "down"), amount=body.get("amount", 500))
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)})
+            return
+
+        if path == "/api/browser/screenshot":
+            try:
+                from nonroot.browser.manager import get_browser_manager
+                bm = get_browser_manager(on_event=broadcaster.broadcast)
+                res = bm.take_screenshot(full_page=body.get("full_page", False))
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)})
+            return
+
+        if path == "/api/browser/clone":
+            try:
+                from nonroot.browser.cloner import SiteCloner
+                from nonroot.browser.manager import get_browser_manager
+                bm = get_browser_manager(on_event=broadcaster.broadcast)
+                url = body.get("url") or bm.current_url
+                output_folder = body.get("output_folder", "cloned_site")
+                cloner = SiteCloner(workspace=active_agent.workspace)
+                res = cloner.clone(url=url, output_folder=output_folder)
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)})
             return
 
         self.send_error(404, "Not Found")

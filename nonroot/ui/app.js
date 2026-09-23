@@ -66,6 +66,30 @@ const settingMaxSteps = document.getElementById('setting-max-steps');
 const settingSystemPrompt = document.getElementById('setting-system-prompt');
 const settingAutoAccept = document.getElementById('setting-auto-accept');
 
+// Browser Sidepanel & AI Cursor Elements
+const browserSidepanel = document.getElementById('browser-sidepanel');
+const btnToggleBrowser = document.getElementById('btn-toggle-browser');
+const browserPulseDot = document.getElementById('browser-pulse-dot');
+const browserBtnBack = document.getElementById('browser-btn-back');
+const browserBtnForward = document.getElementById('browser-btn-forward');
+const browserBtnReload = document.getElementById('browser-btn-reload');
+const browserUrlInput = document.getElementById('browser-url-input');
+const browserBtnGo = document.getElementById('browser-btn-go');
+const browserAiBadge = document.getElementById('browser-ai-badge');
+const browserAiStatusText = document.getElementById('browser-ai-status-text');
+const browserBtnClose = document.getElementById('browser-btn-close');
+const browserViewportWrapper = document.getElementById('browser-viewport-wrapper');
+const browserViewportCanvas = document.getElementById('browser-viewport-canvas');
+const browserScreenImg = document.getElementById('browser-screen-img');
+const browserLoadingOverlay = document.getElementById('browser-loading-overlay');
+const aiCursor = document.getElementById('ai-cursor');
+const aiCursorBadge = document.getElementById('ai-cursor-badge');
+const aiCursorLabel = document.getElementById('ai-cursor-label');
+const aiCursorRipple = document.getElementById('ai-cursor-ripple');
+const browserFooterTitle = document.getElementById('browser-footer-title');
+const btnBrowserClone = document.getElementById('btn-browser-clone');
+const btnBrowserInspectChat = document.getElementById('btn-browser-inspect-chat');
+
 // Monotonic run generation counter to discard stale streaming events after stop or rollback
 let currentRunGeneration = 0;
 
@@ -838,6 +862,9 @@ function handleAgentEvent(evt) {
 
         case 'tool_start':
             ensureAssistantCard();
+            if (evt.name && evt.name.startsWith('browser_')) {
+                toggleBrowserSidepanel(true);
+            }
             if (evt.name === 'spawn_subagent') {
                 const subId = (evt.args && evt.args.id) || 'sub_' + Date.now();
                 renderSubagentChatStart(subId, evt.args.role, evt.args.prompt);
@@ -848,6 +875,15 @@ function handleAgentEvent(evt) {
             break;
 
         case 'tool_end':
+            if (evt.name && evt.name.startsWith('browser_')) {
+                if (evt.result && evt.result.screenshot) {
+                    handleBrowserStateEvent({
+                        screenshot: evt.result.screenshot,
+                        url: evt.result.url,
+                        title: evt.result.title
+                    });
+                }
+            }
             if (evt.name === 'spawn_subagent' || (evt.result && evt.result.is_subagent)) {
                 const subId = evt.result.subagent_id;
                 const subRole = evt.result.subagent_role || 'Субагент';
@@ -882,6 +918,14 @@ function handleAgentEvent(evt) {
                     });
                 }
             }
+            break;
+
+        case 'browser_state':
+            handleBrowserStateEvent(evt);
+            break;
+
+        case 'browser_cursor':
+            handleBrowserCursorEvent(evt);
             break;
 
         case 'subagent_event':
@@ -2024,12 +2068,282 @@ if (btnAuthSaveCustom) {
     });
 }
 
+// ============================================================================
+// EMBEDDED CHROMIUM BROWSER SUBSYSTEM & AI CURSOR
+// ============================================================================
+
+let isBrowserOpen = false;
+let currentBrowserUrl = '';
+let currentBrowserScreenshot = null;
+let aiCursorHideTimeout = null;
+
+function toggleBrowserSidepanel(show = null) {
+    if (!browserSidepanel) return;
+    const willShow = (show !== null) ? !!show : browserSidepanel.classList.contains('hidden');
+    isBrowserOpen = willShow;
+
+    if (willShow) {
+        browserSidepanel.classList.remove('hidden');
+        if (btnToggleBrowser) btnToggleBrowser.classList.add('active');
+        if (!browserScreenImg || !browserScreenImg.src || browserScreenImg.src.endsWith('#') || browserScreenImg.src === window.location.href) {
+            fetchBrowserState();
+        }
+    } else {
+        browserSidepanel.classList.add('hidden');
+        if (btnToggleBrowser) btnToggleBrowser.classList.remove('active');
+    }
+}
+
+function fetchBrowserState() {
+    fetch('/api/browser/state')
+        .then(r => r.json())
+        .then(data => {
+            if (data) {
+                handleBrowserStateEvent(data);
+            }
+        })
+        .catch(err => console.debug('Browser state fetch error:', err));
+}
+
+function handleBrowserStateEvent(data) {
+    if (!data) return;
+
+    if (data.url) {
+        currentBrowserUrl = data.url;
+        if (browserUrlInput && document.activeElement !== browserUrlInput) {
+            browserUrlInput.value = data.url;
+        }
+        if (browserPulseDot) browserPulseDot.classList.add('active');
+    }
+
+    if (data.title) {
+        if (browserFooterTitle) browserFooterTitle.textContent = data.title;
+    } else if (data.url && browserFooterTitle) {
+        browserFooterTitle.textContent = data.url;
+    }
+
+    if (data.screenshot) {
+        currentBrowserScreenshot = data.screenshot;
+        if (browserScreenImg) {
+            browserScreenImg.src = data.screenshot;
+        }
+    }
+
+    if (browserAiStatusText && data.ai_action) {
+        browserAiStatusText.textContent = data.ai_action;
+    }
+
+    if (browserLoadingOverlay) {
+        if (data.loading) {
+            browserLoadingOverlay.classList.remove('hidden');
+        } else {
+            browserLoadingOverlay.classList.add('hidden');
+        }
+    }
+}
+
+function handleBrowserCursorEvent(data) {
+    if (!aiCursor || !browserViewportCanvas) return;
+
+    const x = typeof data.x === 'number' ? data.x : 0;
+    const y = typeof data.y === 'number' ? data.y : 0;
+
+    const leftPercent = Math.min(100, Math.max(0, (x / 1280) * 100));
+    const topPercent = Math.min(100, Math.max(0, (y / 800) * 100));
+
+    aiCursor.style.left = `${leftPercent}%`;
+    aiCursor.style.top = `${topPercent}%`;
+    aiCursor.classList.remove('hidden');
+
+    if (aiCursorLabel) {
+        aiCursorLabel.textContent = data.label || data.action || 'ИИ';
+    }
+
+    if (browserAiStatusText) {
+        browserAiStatusText.textContent = data.label || data.action || 'ИИ действует';
+    }
+
+    if (data.ripple && aiCursorRipple) {
+        aiCursorRipple.classList.remove('active');
+        void aiCursorRipple.offsetWidth;
+        aiCursorRipple.classList.add('active');
+    }
+
+    if (aiCursorHideTimeout) clearTimeout(aiCursorHideTimeout);
+    aiCursorHideTimeout = setTimeout(() => {
+        if (!isRunning && aiCursor) {
+            aiCursor.classList.add('hidden');
+            if (browserAiStatusText) browserAiStatusText.textContent = 'ИИ готов';
+        }
+    }, 4000);
+}
+
+function navigateBrowser(url) {
+    if (!url) return;
+    let target = url.trim();
+    if (!target.startsWith('http://') && !target.startsWith('https://') && !target.startsWith('about:')) {
+        target = 'https://' + target;
+    }
+    if (browserUrlInput) browserUrlInput.value = target;
+    if (browserLoadingOverlay) browserLoadingOverlay.classList.remove('hidden');
+    if (browserAiStatusText) browserAiStatusText.textContent = 'Загрузка...';
+
+    fetch('/api/browser/navigate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: target })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (browserLoadingOverlay) browserLoadingOverlay.classList.add('hidden');
+        if (data.success) {
+            handleBrowserStateEvent(data);
+        } else {
+            alert('Ошибка загрузки страницы: ' + (data.error || 'неизвестная ошибка'));
+        }
+    })
+    .catch(err => {
+        if (browserLoadingOverlay) browserLoadingOverlay.classList.add('hidden');
+        alert('Сбой связи с браузером: ' + err.message);
+    });
+}
+
+function handleViewportClick(e) {
+    if (!browserScreenImg) return;
+    const rect = browserScreenImg.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    const origX = Math.round((clickX / rect.width) * 1280);
+    const origY = Math.round((clickY / rect.height) * 800);
+
+    handleBrowserCursorEvent({
+        x: origX,
+        y: origY,
+        action: 'click',
+        label: 'Клик',
+        ripple: true
+    });
+
+    fetch('/api/browser/click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x: origX, y: origY, description: 'Клик пользователя' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success && data.screenshot) {
+            handleBrowserStateEvent(data);
+        }
+    })
+    .catch(err => console.debug('Viewport click error:', err));
+}
+
+// Browser UI Event Listeners
+if (btnToggleBrowser) {
+    btnToggleBrowser.addEventListener('click', () => toggleBrowserSidepanel());
+}
+
+if (browserBtnClose) {
+    browserBtnClose.addEventListener('click', () => toggleBrowserSidepanel(false));
+}
+
+if (browserBtnGo && browserUrlInput) {
+    browserBtnGo.addEventListener('click', () => navigateBrowser(browserUrlInput.value));
+    browserUrlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            navigateBrowser(browserUrlInput.value);
+        }
+    });
+}
+
+if (browserBtnReload) {
+    browserBtnReload.addEventListener('click', () => {
+        const url = currentBrowserUrl || (browserUrlInput ? browserUrlInput.value : '');
+        if (url) navigateBrowser(url);
+    });
+}
+
+if (browserScreenImg) {
+    browserScreenImg.addEventListener('click', handleViewportClick);
+}
+
+// Quick action: Clone 1-to-1
+if (btnBrowserClone) {
+    btnBrowserClone.addEventListener('click', () => {
+        const url = currentBrowserUrl || (browserUrlInput ? browserUrlInput.value : '');
+        if (!url) {
+            alert('Сначала откройте страницу в браузере для клонирования');
+            return;
+        }
+
+        const originalHtml = btnBrowserClone.innerHTML;
+        btnBrowserClone.disabled = true;
+        btnBrowserClone.innerHTML = '<span>Клонирование 1 в 1...</span>';
+
+        fetch('/api/browser/clone', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: url, output_folder: 'cloned_site' })
+        })
+        .then(r => r.json())
+        .then(data => {
+            btnBrowserClone.disabled = false;
+            btnBrowserClone.innerHTML = originalHtml;
+            if (data.success) {
+                alert(`Сайт успешно клонирован 1 в 1 в директорию "${data.output_dir || 'cloned_site'}"!\n\nСоздана автономная копия: index.html, style.css, загружены изображения и ассеты.`);
+            } else {
+                alert('Ошибка при клонировании сайта: ' + (data.error || 'неизвестная ошибка'));
+            }
+        })
+        .catch(err => {
+            btnBrowserClone.disabled = false;
+            btnBrowserClone.innerHTML = originalHtml;
+            alert('Сбой запроса клонирования: ' + err.message);
+        });
+    });
+}
+
+// Quick action: Inspect in Chat (Snapshot)
+if (btnBrowserInspectChat) {
+    btnBrowserInspectChat.addEventListener('click', () => {
+        if (!currentBrowserScreenshot) {
+            alert('В браузере пока нет открытой страницы');
+            return;
+        }
+        if (!attachedImages.includes(currentBrowserScreenshot)) {
+            attachedImages.push(currentBrowserScreenshot);
+            renderImagePreviews();
+        }
+        if (promptInput) {
+            promptInput.value = promptInput.value || 'Внимательно посмотри на скриншот страницы и скопируй её дизайн:';
+            promptInput.focus();
+        }
+    });
+}
+
+// Shortcut: Cmd+B or Ctrl+B to toggle browser
+window.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        // Do not intercept inside textareas unless explicitly requested
+        if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') && document.activeElement !== promptInput) {
+            return;
+        }
+        e.preventDefault();
+        toggleBrowserSidepanel();
+    }
+});
+
 // Initialize on Load
 window.addEventListener('DOMContentLoaded', () => {
     initSessions();
     connectSSE();
     loadModelsList();
     fetchAuthStatus();
+    fetchBrowserState();
     setTimeout(() => checkForUpdates(true), 2000);
     setInterval(() => checkForUpdates(true), 15 * 60 * 1000); // Check every 15 minutes
 });

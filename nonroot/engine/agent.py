@@ -260,11 +260,15 @@ class AutonomousAgent:
                     if res.get("error"):
                         out_str += f"\nError: {res['error']}"
 
-                    self.messages.append({
+                    tool_msg = {
                         "role": "tool",
                         "tool_call_id": t_id,
                         "content": out_str
-                    })
+                    }
+                    if res.get("screenshot"):
+                        tool_msg["images"] = [res["screenshot"]]
+
+                    self.messages.append(tool_msg)
 
         except Exception as e:
             self._emit("error", {"error": f"Agent loop error: {str(e)}"})

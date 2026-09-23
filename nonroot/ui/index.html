@@ -71,10 +71,15 @@
                 </div>
             </div>
 
-            <!-- TOP BAR: MODEL SELECTION -->
+            <!-- TOP BAR: MODEL SELECTION & BROWSER TOGGLE -->
             <header class="top-nav">
                 <div class="nav-left"></div>
                 <div class="nav-right">
+                    <button type="button" class="btn-top-browser" id="btn-toggle-browser" title="Встроенный браузер Chromium (Cmd+B)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+                        <span>Браузер</span>
+                        <span class="browser-pulse-dot" id="browser-pulse-dot"></span>
+                    </button>
                     <button type="button" class="btn-model-trigger" id="btn-top-model-trigger" title="Выбрать модель ИИ">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/></svg>
                         <span class="active-model-name" id="top-model-label">deepseek-chat</span>
@@ -175,6 +180,93 @@
                 </div>
             </footer>
         </main>
+
+        <!-- RIGHT CHROMIUM BROWSER SIDEPANEL -->
+        <aside class="browser-sidepanel hidden" id="browser-sidepanel">
+            <!-- Chromium Chrome Bar -->
+            <div class="browser-chrome-header">
+                <div class="browser-nav-group">
+                    <button class="browser-btn-nav" id="browser-btn-back" title="Назад" type="button">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <button class="browser-btn-nav" id="browser-btn-forward" title="Вперед" type="button">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                    <button class="browser-btn-nav" id="browser-btn-reload" title="Обновить страницу" type="button">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </button>
+                </div>
+
+                <!-- Omnibox / Address Bar -->
+                <div class="browser-omnibox">
+                    <span class="browser-lock-icon" title="Защищенное соединение">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </span>
+                    <input type="text" class="browser-url-input" id="browser-url-input" placeholder="https://..." value="https://google.com">
+                    <button class="browser-btn-go" id="browser-btn-go" title="Перейти" type="button">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                </div>
+
+                <!-- Action badges & Close -->
+                <div class="browser-status-group">
+                    <div class="browser-live-badge" title="Живая трансляция экрана">
+                        <span class="live-dot"></span>
+                        <span>LIVE</span>
+                    </div>
+                    <div class="browser-ai-badge" id="browser-ai-badge" title="Статус управления нейросетью">
+                        <span class="ai-status-dot"></span>
+                        <span id="browser-ai-status-text">ИИ готов</span>
+                    </div>
+                    <button class="browser-btn-close" id="browser-btn-close" title="Скрыть браузер (Cmd+B)" type="button">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Viewport Container with Live Screenshot Stream & Animated AI Cursor -->
+            <div class="browser-viewport-wrapper" id="browser-viewport-wrapper">
+                <div class="browser-viewport-canvas" id="browser-viewport-canvas">
+                    <img id="browser-screen-img" class="browser-screen-img" src="" alt="Chromium Viewport">
+                    <div class="browser-loading-overlay hidden" id="browser-loading-overlay">
+                        <div class="browser-spinner"></div>
+                        <span>Загрузка страницы...</span>
+                    </div>
+
+                    <!-- Interactive Animated AI Cursor -->
+                    <div class="ai-cursor hidden" id="ai-cursor">
+                        <div class="ai-cursor-pointer">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="#6366f1" stroke="#ffffff" stroke-width="1.5">
+                                <path d="M3 3l7 18 3-7 7-3L3 3z"/>
+                            </svg>
+                        </div>
+                        <div class="ai-cursor-badge" id="ai-cursor-badge">
+                            <span class="ai-cursor-tag">AI</span>
+                            <span class="ai-cursor-label" id="ai-cursor-label">Клик</span>
+                        </div>
+                        <div class="ai-cursor-ripple" id="ai-cursor-ripple"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Browser Bottom Bar with Quick Actions -->
+            <div class="browser-footer-bar">
+                <div class="browser-footer-left">
+                    <span class="browser-viewport-info">1280 × 800</span>
+                    <span class="browser-title-preview" id="browser-footer-title">Google</span>
+                </div>
+                <div class="browser-footer-right">
+                    <button class="btn-browser-action" id="btn-browser-clone" title="Клонировать этот сайт 1 в 1 в проект" type="button">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        <span>Клонировать 1 в 1</span>
+                    </button>
+                    <button class="btn-browser-action secondary" id="btn-browser-inspect-chat" title="Отправить скриншот в чат агенту" type="button">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                        <span>Снимок</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
     </div>
 
     <!-- WORKSPACE SCOPE MODAL -->
