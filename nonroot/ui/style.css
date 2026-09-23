@@ -105,6 +105,13 @@ body {
     border-color: #3f3f4a;
 }
 
+.sidebar-workspace-group {
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
 .workspace-pill {
     display: flex;
     align-items: center;
@@ -114,13 +121,79 @@ body {
     padding: 8px 10px;
     border-radius: 7px;
     cursor: pointer;
-    margin-bottom: 14px;
-    transition: all 0.12s ease;
+    transition: all 0.12s cubic-bezier(0.2, 0, 0, 1);
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .workspace-pill:hover {
     border-color: var(--border-strong);
     background: #1c1c20;
+}
+
+.btn-select-folder {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 7px 10px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.22);
+    border-radius: 6px;
+    cursor: pointer;
+    outline: none;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: all 0.12s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.btn-select-folder:hover {
+    background: rgba(56, 189, 248, 0.16);
+    border-color: var(--accent-blue);
+    color: #fff;
+}
+
+.btn-select-folder svg {
+    color: var(--accent-blue);
+    flex-shrink: 0;
+}
+
+/* Tactile Click & Press Animations */
+.btn-select-folder:active,
+.scope-card:active,
+.workspace-pill:active,
+.btn-select-folder-modal:active {
+    transform: scale(0.96) translateY(1px) !important;
+    background: rgba(56, 189, 248, 0.18) !important;
+    border-color: var(--accent-blue) !important;
+    transition: transform 0.06s ease, background 0.06s ease !important;
+}
+
+@keyframes buttonClickPulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.6);
+    }
+    30% {
+        transform: scale(0.95) translateY(1px);
+        box-shadow: 0 0 0 5px rgba(56, 189, 248, 0.3);
+    }
+    65% {
+        transform: scale(0.98);
+        box-shadow: 0 0 0 9px rgba(56, 189, 248, 0.08);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+    }
+}
+
+.btn-anim-click {
+    animation: buttonClickPulse 0.32s cubic-bezier(0.2, 0.9, 0.3, 1) !important;
 }
 
 .workspace-pill-icon {
@@ -1337,10 +1410,12 @@ textarea#prompt-input {
     padding: 12px 14px;
     cursor: pointer;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 12px;
-    transition: all 0.12s ease;
+    transition: all 0.12s cubic-bezier(0.2, 0, 0, 1);
     text-align: left;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .scope-card:hover {
@@ -1353,9 +1428,28 @@ textarea#prompt-input {
     background: rgba(56, 189, 248, 0.05);
 }
 
+.scope-card-action-badge {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent-blue);
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    padding: 4px 9px;
+    border-radius: 5px;
+    flex-shrink: 0;
+    transition: all 0.12s ease;
+}
+
+.scope-card:hover .scope-card-action-badge {
+    background: var(--accent-blue);
+    color: #09090b;
+    border-color: var(--accent-blue);
+    font-weight: 600;
+}
+
 .scope-card-icon {
     color: var(--accent-blue);
-    margin-top: 2px;
     flex-shrink: 0;
 }
 

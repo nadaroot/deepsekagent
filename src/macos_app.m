@@ -8,7 +8,7 @@
 #import <netinet/in.h>
 #import <arpa/inet.h>
 
-@interface AppDelegate : NSObject <NSApplicationDelegate, WKNavigationDelegate, NSWindowDelegate>
+@interface AppDelegate : NSObject <NSApplicationDelegate, WKNavigationDelegate, NSWindowDelegate, WKScriptMessageHandler>
 @property (strong, nonatomic) NSWindow *window;
 @property (strong, nonatomic) WKWebView *webView;
 @property (strong, nonatomic) NSTask *pythonTask;
@@ -115,6 +115,10 @@
     [config.preferences setValue:@YES forKey:@"developerExtrasEnabled"];
     [config.preferences setValue:@YES forKey:@"fullScreenEnabled"];
 
+    WKUserContentController *userContentController = [[WKUserContentController alloc] init];
+    [userContentController addScriptMessageHandler:self name:@"nativePickFolder"];
+    config.userContentController = userContentController;
+
     self.webView = [[WKWebView alloc] initWithFrame:self.window.contentView.bounds configuration:config];
     self.webView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     self.webView.navigationDelegate = self;
@@ -125,6 +129,37 @@
     [self.window.contentView addSubview:self.webView];
     [self.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
+}
+
+- (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message {
+    if ([message.name isEqualToString:@"nativePickFolder"]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [NSApp activateIgnoringOtherApps:YES];
+            [self.window makeKeyAndOrderFront:nil];
+
+            NSOpenPanel *panel = [NSOpenPanel openPanel];
+            panel.canChooseFiles = NO;
+            panel.canChooseDirectories = YES;
+            panel.allowsMultipleSelection = NO;
+            panel.canCreateDirectories = YES;
+            panel.resolvesAliases = YES;
+            panel.title = @"Выбрать папку проекта";
+            panel.prompt = @"Выбрать";
+            panel.message = @"Выберите рабочую папку проекта для NonRoot:";
+
+            [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
+                if (returnCode == NSModalResponseOK) {
+                    NSURL *url = [[panel URLs] firstObject];
+                    if (url) {
+                        NSString *path = [url path];
+                        NSString *escaped = [[path stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"] stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
+                        NSString *js = [NSString stringWithFormat:@"if (window.onNativeFolderPicked) { window.onNativeFolderPicked(\"%@\"); }", escaped];
+                        [self.webView evaluateJavaScript:js completionHandler:nil];
+                    }
+                }
+            }];
+        });
+    }
 }
 
 - (void)reloadPage:(id)sender {

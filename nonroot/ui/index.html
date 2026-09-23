@@ -25,15 +25,21 @@
                 </button>
             </div>
 
-            <!-- Single Workspace Selector -->
-            <div class="workspace-pill" id="workspace-pill" title="Нажмите для смены рабочей папки">
-                <div class="workspace-pill-icon">
+            <!-- Single Workspace Selector & Folder Picker -->
+            <div class="sidebar-workspace-group">
+                <div class="workspace-pill" id="workspace-pill" title="Нажмите для смены рабочей папки">
+                    <div class="workspace-pill-icon">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <div class="workspace-pill-info">
+                        <span class="workspace-pill-label">Рабочая область</span>
+                        <span class="workspace-pill-path" id="workspace-path">...</span>
+                    </div>
+                </div>
+                <button class="btn-select-folder" id="btn-sidebar-pick-folder" onclick="pickWorkspaceFolder(this)" title="Выбрать папку проекта в проводнике">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                </div>
-                <div class="workspace-pill-info">
-                    <span class="workspace-pill-label">Рабочая область</span>
-                    <span class="workspace-pill-path" id="workspace-path">...</span>
-                </div>
+                    <span>Выбрать папку проекта</span>
+                </button>
             </div>
 
             <!-- Chat History -->
@@ -90,7 +96,7 @@
                     <div class="scope-picker-section">
                         <div class="scope-picker-header">Рабочая область:</div>
                         <div class="scope-picker-cards">
-                            <div class="scope-card active" id="scope-card-root" onclick="selectWorkspaceScope('/')">
+                            <div class="scope-card active" id="scope-card-root" onclick="selectWorkspaceScope('/')" role="button" tabindex="0">
                                 <div class="scope-card-icon">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                                 </div>
@@ -99,7 +105,7 @@
                                     <div class="scope-card-desc">Полный доступ ко всей файловой системе и терминалу</div>
                                 </div>
                             </div>
-                            <div class="scope-card" id="scope-card-folder" onclick="pickWorkspaceFolder()">
+                            <div class="scope-card" id="scope-card-folder" onclick="pickWorkspaceFolder(this)" role="button" tabindex="0">
                                 <div class="scope-card-icon">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                                 </div>
@@ -107,6 +113,7 @@
                                     <div class="scope-card-title">Выбрать папку проекта</div>
                                     <div class="scope-card-desc" id="scope-folder-desc">Открыть проводник для выбора папки</div>
                                 </div>
+                                <span class="scope-card-action-badge">Выбрать</span>
                             </div>
                         </div>
                     </div>
@@ -168,9 +175,9 @@
                 </button>
             </div>
             <div class="modal-body">
-                <button class="btn btn-primary" style="width:100%;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;padding:9px;" onclick="pickWorkspaceFolder()">
+                <button class="btn btn-primary btn-select-folder-modal" style="width:100%;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;padding:9px;" onclick="pickWorkspaceFolder(this)">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                    <span>Открыть диалог выбора папки (Проводник)</span>
+                    <span>Выбрать папку проекта (Проводник)</span>
                 </button>
                 <div class="form-group">
                     <label class="form-label">Или укажите путь вручную</label>

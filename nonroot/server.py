@@ -32,15 +32,9 @@ def pick_folder_native(initial_dir: Optional[str] = None) -> Optional[str]:
     system = sys.platform
 
     if system == "darwin":
-        script = '''
-        tell application "System Events"
-            activate
-            set chosenFolder to choose folder with prompt "Выберите рабочую папку для NonRoot:"
-            return POSIX path of chosenFolder
-        end tell
-        '''
+        script = 'POSIX path of (choose folder with prompt "Выберите рабочую папку проекта NonRoot:")'
         try:
-            p = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=60)
+            p = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=120)
             if p.returncode == 0:
                 res = p.stdout.strip()
                 if res:

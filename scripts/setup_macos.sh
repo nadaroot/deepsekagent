@@ -23,8 +23,8 @@ cp "$BASE_DIR/requirements.txt" "$APP_DIR/Contents/Resources/app/"
 cp "$BASE_DIR/assets/app.icns" "$APP_DIR/Contents/Resources/app.icns"
 
 if [ -d "$BASE_DIR/../deepseek-api" ]; then
-    cp -R "$BASE_DIR/../deepseek-api" "$APP_DIR/Contents/Resources/" || true
-    cp -R "$BASE_DIR/../deepseek-api" "$HOME/.nonroot/" || true
+    rsync -a --exclude='.git' "$BASE_DIR/../deepseek-api" "$APP_DIR/Contents/Resources/" 2>/dev/null || cp -R "$BASE_DIR/../deepseek-api" "$APP_DIR/Contents/Resources/" 2>/dev/null || true
+    rsync -a --exclude='.git' "$BASE_DIR/../deepseek-api" "$HOME/.nonroot/" 2>/dev/null || cp -R "$BASE_DIR/../deepseek-api" "$HOME/.nonroot/" 2>/dev/null || true
 fi
 
 cp -R "$BASE_DIR/nonroot" "$HOME/.nonroot/app/"

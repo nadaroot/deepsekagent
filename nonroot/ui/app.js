@@ -375,7 +375,47 @@ function updateScopeUI(path) {
     }
 }
 
-window.pickWorkspaceFolder = function() {
+function triggerFolderButtonAnimation(targetEl) {
+    const targets = [];
+    if (targetEl && targetEl instanceof HTMLElement) {
+        targets.push(targetEl);
+    }
+    const folderCard = document.getElementById('scope-card-folder');
+    if (folderCard && !targets.includes(folderCard)) targets.push(folderCard);
+    const sidebarBtn = document.getElementById('btn-sidebar-pick-folder');
+    if (sidebarBtn && !targets.includes(sidebarBtn)) targets.push(sidebarBtn);
+
+    targets.forEach(t => {
+        t.classList.remove('btn-anim-click');
+        void t.offsetWidth;
+        t.classList.add('btn-anim-click');
+        setTimeout(() => {
+            t.classList.remove('btn-anim-click');
+        }, 360);
+    });
+}
+
+window.onNativeFolderPicked = function(data) {
+    const ws = (typeof data === 'string') ? data : (data && data.workspace);
+    if (ws) {
+        selectWorkspaceScope(ws);
+    }
+};
+
+window.pickWorkspaceFolder = function(triggerEl) {
+    triggerFolderButtonAnimation(triggerEl);
+
+    // Instant native macOS Cocoa dialog via WebKit bridge (0ms delay)
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.nativePickFolder) {
+        try {
+            window.webkit.messageHandlers.nativePickFolder.postMessage({});
+            return;
+        } catch (e) {
+            console.warn('Native folder bridge fallback:', e);
+        }
+    }
+
+    // Fallback to server API
     fetch('/api/workspace/pick', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
