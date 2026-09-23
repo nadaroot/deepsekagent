@@ -71,19 +71,19 @@
                 </div>
             </div>
 
-            <!-- TOP BAR: ONLY MODEL SELECTION -->
+            <!-- TOP BAR: MODEL SELECTION -->
             <header class="top-nav">
                 <div class="nav-left"></div>
                 <div class="nav-right">
-                    <div class="model-select-wrapper">
-                        <select id="model-select" class="model-dropdown">
-                            <optgroup label="Официальные DeepSeek">
-                                <option value="deepseek-chat" selected>deepseek-chat (V3)</option>
-                                <option value="deepseek-reasoner">deepseek-reasoner (R1 Thinking)</option>
-                                <option value="deepseek-coder">deepseek-coder (33B)</option>
-                            </optgroup>
-                        </select>
-                    </div>
+                    <button type="button" class="btn-model-trigger" id="btn-top-model-trigger" title="Выбрать модель ИИ">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/></svg>
+                        <span class="active-model-name" id="top-model-label">deepseek-chat</span>
+                        <svg class="chevron-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <!-- Hidden select for compatibility -->
+                    <select id="model-select" style="display: none;">
+                        <option value="deepseek-chat" selected>deepseek-chat</option>
+                    </select>
                 </div>
             </header>
 
@@ -143,24 +143,34 @@
 
             <!-- CLEAN MINIMALIST INPUT -->
             <footer class="input-panel">
-                <div class="image-preview-strip" id="image-preview-strip"></div>
-                
                 <div class="input-box">
-                    <button class="btn-attach" id="btn-attach-image" title="Прикрепить изображение">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                    </button>
-                    <input type="file" id="file-input" accept="image/*" multiple style="display: none;">
+                    <div class="image-preview-strip" id="image-preview-strip"></div>
+                    <div class="input-textarea-row">
+                        <textarea id="prompt-input" placeholder="Поставьте задачу агенту..." rows="1"></textarea>
+                    </div>
+                    <div class="input-controls-row">
+                        <div class="input-left-controls">
+                            <button class="btn-attach" id="btn-attach-image" type="button" title="Прикрепить изображение">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                            </button>
+                            <input type="file" id="file-input" accept="image/*" multiple style="display: none;">
 
-                    <textarea id="prompt-input" placeholder="Поставьте задачу агенту..." rows="1"></textarea>
+                            <button type="button" class="btn-bottom-model" id="btn-bottom-model-trigger" title="Выбрать модель нейросети">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/></svg>
+                                <span class="model-badge-name" id="bottom-model-label">deepseek-chat</span>
+                                <svg class="chevron-icon" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                        </div>
 
-                    <div class="input-actions">
-                        <button class="btn-stop hidden" id="btn-stop-agent" title="Остановить">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
-                            <span>Стоп</span>
-                        </button>
-                        <button class="btn-send" id="btn-send-prompt" title="Отправить задачу (Enter)">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-                        </button>
+                        <div class="input-actions">
+                            <button class="btn-stop hidden" id="btn-stop-agent" title="Остановить">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                                <span>Стоп</span>
+                            </button>
+                            <button class="btn-send" id="btn-send-prompt" title="Отправить задачу (Enter)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </footer>
@@ -229,195 +239,250 @@
         </div>
     </div>
 
-    <!-- SETTINGS MODAL -->
-    <div class="modal-overlay hidden" id="settings-modal">
-        <div class="modal-dialog modal-large">
-            <div class="modal-header">
-                <h2 class="modal-title">Настройки</h2>
-                <button class="btn-icon" id="btn-close-settings">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    <!-- CUSTOM MODEL PICKER POPOVER -->
+    <div class="model-picker-popover hidden" id="model-picker-popover">
+        <div class="model-picker-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="model-search-input" placeholder="Поиск модели..." autocomplete="off">
+        </div>
+        <div class="model-picker-scroll" id="model-picker-list">
+            <!-- Dynamic model groups and options -->
+        </div>
+    </div>
+
+    <!-- FULLSCREEN SETTINGS VIEW -->
+    <div class="settings-fullscreen hidden" id="settings-modal">
+        <header class="settings-fullscreen-header">
+            <div class="settings-header-left">
+                <button type="button" class="btn-back-settings" id="btn-close-settings" title="Вернуться в чат (Esc)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                    <span>Назад в чат</span>
+                </button>
+                <div class="settings-title-group">
+                    <h1 class="settings-main-title">Настройки</h1>
+                    <span class="settings-main-subtitle">Конфигурация параметров агента, токенов и провайдеров</span>
+                </div>
+            </div>
+            <div class="settings-header-right">
+                <button type="button" class="btn btn-secondary" id="btn-cancel-settings">Отмена</button>
+                <button type="button" class="btn btn-primary" id="btn-save-settings">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    <span>Сохранить настройки</span>
                 </button>
             </div>
+        </header>
 
-            <!-- Settings Tabs Header -->
-            <div class="settings-tabs-header">
-                <button type="button" class="settings-tab-btn active" data-tab="pane-auth">Токен DeepSeek</button>
-                <button type="button" class="settings-tab-btn" data-tab="pane-providers">Провайдеры и API-ключи</button>
-                <button type="button" class="settings-tab-btn" data-tab="pane-general">Параметры агента</button>
-                <button type="button" class="settings-tab-btn" data-tab="pane-updates">Обновления</button>
-            </div>
+        <div class="settings-fullscreen-body">
+            <!-- Left Navigation Sidebar -->
+            <nav class="settings-fullscreen-sidebar">
+                <button type="button" class="settings-tab-btn active" data-tab="pane-auth">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-1.5 1.5L16 7m-3 3l-2 2M3 21l3-3m0 0l4-4m-4 4l-2-2m6-2l-2-2m5-5a5 5 0 1 1 7.07-7.07 5 5 0 0 1-7.07 7.07z"/></svg>
+                    <span>Токен DeepSeek</span>
+                </button>
+                <button type="button" class="settings-tab-btn" data-tab="pane-providers">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    <span>Провайдеры и API-ключи</span>
+                </button>
+                <button type="button" class="settings-tab-btn" data-tab="pane-general">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <span>Параметры агента</span>
+                </button>
+                <button type="button" class="settings-tab-btn" data-tab="pane-updates">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <span>Обновления</span>
+                </button>
+            </nav>
 
-            <div class="modal-body">
-                <!-- TAB 1: DEEPSEEK AUTH & TOKEN MANAGEMENT -->
-                <div class="settings-tab-pane active" id="pane-auth">
-                    <div class="pane-hint">Встроенный токен DeepSeek активен сразу. Вы можете запустить браузер для повторного входа, вернуть предыдущий токен или загрузить свой.</div>
+            <!-- Right Spacious Content Container -->
+            <main class="settings-fullscreen-content">
+                <div class="settings-pane-container">
+                    <!-- TAB 1: DEEPSEEK AUTH & TOKEN MANAGEMENT -->
+                    <div class="settings-tab-pane active" id="pane-auth">
+                        <div class="pane-header-intro">
+                            <h2 class="pane-section-title">Авторизация и токен DeepSeek</h2>
+                            <p class="pane-hint">Встроенный токен DeepSeek активен сразу. Вы можете запустить браузер для повторного входа, вернуть предыдущий токен или загрузить свой собственный.</p>
+                        </div>
 
-                    <!-- Token Status Card -->
-                    <div class="auth-token-card">
-                        <div class="auth-card-header">
-                            <div class="auth-card-title-group">
-                                <span class="auth-card-title">Текущий токен DeepSeek</span>
-                                <span class="auth-status-badge badge-active" id="auth-status-badge">Активен</span>
+                        <!-- Token Status Card -->
+                        <div class="auth-token-card">
+                            <div class="auth-card-header">
+                                <div class="auth-card-title-group">
+                                    <span class="auth-card-title">Текущий токен DeepSeek</span>
+                                    <span class="auth-status-badge badge-active" id="auth-status-badge">Активен</span>
+                                </div>
+                                <span class="auth-source-badge" id="auth-source-badge">Встроенный</span>
                             </div>
-                            <span class="auth-source-badge" id="auth-source-badge">Встроенный</span>
-                        </div>
 
-                        <div class="auth-token-preview-row">
-                            <span class="auth-preview-code" id="auth-token-preview">Загрузка...</span>
-                        </div>
-
-                        <div class="auth-backup-info-row">
-                            <span class="auth-backup-label">Резервная копия старого токена:</span>
-                            <span class="auth-backup-val" id="auth-backup-preview">Нет</span>
-                        </div>
-                    </div>
-
-                    <!-- Browser Login Section -->
-                    <div class="auth-section-card">
-                        <div class="auth-section-title">Авторизация через браузер</div>
-                        <div class="auth-section-desc">Открывает окно Google Chrome на странице chat.deepseek.com. Войдите в свой аккаунт — NonRoot автоматически перехватит токен, сохранит старый токен в резервную копию и применит новый.</div>
-                        <div class="auth-browser-actions">
-                            <button type="button" class="btn btn-primary" id="btn-auth-browser">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="14.83" y1="9.17" x2="18.36" y2="5.64"/><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/></svg>
-                                <span>Запустить браузер для авторизации</span>
-                            </button>
-                            <span class="auth-browser-status hidden" id="auth-browser-status-text">Ожидание авторизации...</span>
-                        </div>
-                    </div>
-
-                    <!-- Token Backup / Revert / Restore Factory Section -->
-                    <div class="auth-section-card">
-                        <div class="auth-section-title">Управление токенами и возврат</div>
-                        <div class="auth-section-desc">Вы можете в любой момент откатиться на сохраненный предыдущий токен или сбросить всё на встроенный рабочий токен.</div>
-                        <div class="auth-buttons-row">
-                            <button type="button" class="btn btn-secondary" id="btn-auth-revert" disabled title="Вернуть предыдущий сохраненный токен">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
-                                <span>Вернуть старый токен</span>
-                            </button>
-                            <button type="button" class="btn btn-secondary" id="btn-auth-restore-default" title="Восстановить встроенный заводской токен из поставки">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                                <span>Сбросить на встроенный токен</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Custom Token Import Section -->
-                    <div class="auth-section-card">
-                        <div class="auth-section-title">Загрузить или вставить свой токен</div>
-                        <div class="auth-section-desc">Вставьте токен вручную или JSON-конфигурацию deepseek-auth.json:</div>
-                        <textarea class="form-textarea auth-token-input" id="auth-custom-token-input" rows="2" placeholder="Вставьте токен (например NNqBskEP...) или весь JSON..."></textarea>
-                        <div class="auth-buttons-row" style="margin-top: 8px;">
-                            <button type="button" class="btn btn-secondary btn-sm" id="btn-auth-save-custom">
-                                <span>Применить свой токен</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 2: PROVIDERS & EXTRA API KEYS -->
-                <div class="settings-tab-pane" id="pane-providers" style="display: none;">
-                    <div class="pane-hint">Настройте ключи для подключения любых нейросетей (OpenAI, OpenRouter, DeepSeek, Groq, Ollama). Модели появятся в верхнем меню.</div>
-                    
-                    <div class="providers-list" id="providers-list">
-                        <!-- Filled by JS -->
-                    </div>
-
-                    <div class="card-add-provider">
-                        <div class="card-add-title">Добавить или обновить провайдер</div>
-                        <div class="form-row">
-                            <div class="form-group" style="flex:1;">
-                                <label class="form-label">Шаблон</label>
-                                <select id="prov-template" class="form-select">
-                                    <option value="custom">Пользовательский</option>
-                                    <option value="deepseek_official">DeepSeek (api.deepseek.com)</option>
-                                    <option value="openai">OpenAI (api.openai.com)</option>
-                                    <option value="openrouter">OpenRouter (openrouter.ai)</option>
-                                    <option value="groq">Groq (api.groq.com)</option>
-                                    <option value="ollama">Ollama (localhost:11434)</option>
-                                </select>
+                            <div class="auth-token-preview-row">
+                                <span class="auth-preview-code" id="auth-token-preview">Загрузка...</span>
                             </div>
-                            <div class="form-group" style="flex:1;">
-                                <label class="form-label">Название</label>
-                                <input type="text" id="prov-name" class="form-input" placeholder="например: OpenAI">
+
+                            <div class="auth-backup-info-row">
+                                <span class="auth-backup-label">Резервная копия старого токена:</span>
+                                <span class="auth-backup-val" id="auth-backup-preview">Нет</span>
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label class="form-label">API Base URL</label>
-                            <input type="text" id="prov-url" class="form-input" placeholder="https://api.openai.com/v1">
+                        <!-- Browser Login Section -->
+                        <div class="auth-section-card">
+                            <div class="auth-section-title">Авторизация через браузер</div>
+                            <div class="auth-section-desc">Открывает окно Google Chrome на странице chat.deepseek.com. Войдите в свой аккаунт — NonRoot автоматически перехватит токен, сохранит старый токен в резервную копию и применит новый.</div>
+                            <div class="auth-browser-actions">
+                                <button type="button" class="btn btn-primary" id="btn-auth-browser">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="14.83" y1="9.17" x2="18.36" y2="5.64"/><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/></svg>
+                                    <span>Запустить браузер для авторизации</span>
+                                </button>
+                                <span class="auth-browser-status hidden" id="auth-browser-status-text">Ожидание авторизации...</span>
+                            </div>
                         </div>
 
-                        <div class="form-group">
-                            <label class="form-label">API Key</label>
-                            <input type="password" id="prov-key" class="form-input" placeholder="sk-...">
+                        <!-- Token Backup / Revert / Restore Factory Section -->
+                        <div class="auth-section-card">
+                            <div class="auth-section-title">Управление токенами и возврат</div>
+                            <div class="auth-section-desc">Вы можете в любой момент откатиться на сохраненный предыдущий токен или сбросить всё на встроенный рабочий токен.</div>
+                            <div class="auth-buttons-row">
+                                <button type="button" class="btn btn-secondary" id="btn-auth-revert" disabled title="Вернуть предыдущий сохраненный токен">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                                    <span>Вернуть старый токен</span>
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="btn-auth-restore-default" title="Восстановить встроенный заводской токен из поставки">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                    <span>Сбросить на встроенный токен</span>
+                                </button>
+                            </div>
                         </div>
 
-                        <div class="form-group">
-                            <label class="form-label">Модели (через запятую)</label>
-                            <input type="text" id="prov-models" class="form-input" placeholder="gpt-4o, gpt-4o-mini, o3-mini">
+                        <!-- Custom Token Import Section -->
+                        <div class="auth-section-card">
+                            <div class="auth-section-title">Загрузить или вставить свой токен</div>
+                            <div class="auth-section-desc">Вставьте токен вручную или JSON-конфигурацию deepseek-auth.json:</div>
+                            <textarea class="form-textarea auth-token-input" id="auth-custom-token-input" rows="2" placeholder="Вставьте токен (например NNqBskEP...) или весь JSON..."></textarea>
+                            <div class="auth-buttons-row" style="margin-top: 10px;">
+                                <button type="button" class="btn btn-secondary btn-sm" id="btn-auth-save-custom">
+                                    <span>Применить свой токен</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: PROVIDERS & EXTRA API KEYS -->
+                    <div class="settings-tab-pane" id="pane-providers" style="display: none;">
+                        <div class="pane-header-intro">
+                            <h2 class="pane-section-title">Провайдеры нейросетей и сторонние API</h2>
+                            <p class="pane-hint">Настройте ключи для подключения любых нейросетей (OpenAI, OpenRouter, DeepSeek API, Groq, Ollama). Добавленные модели сразу отображаются в меню выбора модели.</p>
                         </div>
 
-                        <button type="button" class="btn btn-secondary btn-sm" id="btn-save-provider-item">
-                            <span>Сохранить провайдер в список</span>
-                        </button>
+                        <div class="providers-list" id="providers-list">
+                            <!-- Filled by JS -->
+                        </div>
+
+                        <div class="card-add-provider">
+                            <div class="card-add-title">Добавить или обновить провайдер</div>
+                            <div class="form-row">
+                                <div class="form-group" style="flex:1;">
+                                    <label class="form-label">Шаблон подключения</label>
+                                    <select id="prov-template" class="form-select">
+                                        <option value="custom">Пользовательский</option>
+                                        <option value="deepseek_official">DeepSeek (api.deepseek.com)</option>
+                                        <option value="openai">OpenAI (api.openai.com)</option>
+                                        <option value="openrouter">OpenRouter (openrouter.ai)</option>
+                                        <option value="groq">Groq (api.groq.com)</option>
+                                        <option value="ollama">Ollama (localhost:11434)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex:1;">
+                                    <label class="form-label">Название провайдера</label>
+                                    <input type="text" id="prov-name" class="form-input" placeholder="например: OpenAI">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">API Base URL</label>
+                                <input type="text" id="prov-url" class="form-input" placeholder="https://api.openai.com/v1">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">API Key</label>
+                                <input type="password" id="prov-key" class="form-input" placeholder="sk-...">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Модели (через запятую)</label>
+                                <input type="text" id="prov-models" class="form-input" placeholder="gpt-4o, gpt-4o-mini, o3-mini">
+                            </div>
+
+                            <div class="form-actions-right">
+                                <button type="button" class="btn btn-secondary" id="btn-save-provider-item">
+                                    <span>Сохранить провайдер в список</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: GENERAL SETTINGS -->
+                    <div class="settings-tab-pane" id="pane-general" style="display: none;">
+                        <div class="pane-header-intro">
+                            <h2 class="pane-section-title">Параметры агента и среда выполнения</h2>
+                            <p class="pane-hint">Настройки поведения, лимитов шагов автономного цикла и прав на автоматическое выполнение действий.</p>
+                        </div>
+
+                        <div class="settings-card">
+                            <div class="form-group">
+                                <label class="form-label">Рабочая директория по умолчанию</label>
+                                <input type="text" id="setting-workspace" class="form-input" placeholder="/">
+                                <div class="form-hint">Папка, в которой агент выполняет команды и создает файлы при старте</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Лимит шагов автономного цикла</label>
+                                <input type="number" id="setting-max-steps" class="form-input" value="30" min="5" max="100">
+                                <div class="form-hint">Максимальное количество шагов reasoning + tools на один запрос пользователя</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Системные инструкции (System Prompt)</label>
+                                <textarea id="setting-system-prompt" class="form-textarea" rows="4" placeholder="Специальные инструкции для агента (например: всегда писать тесты, отвечать лаконично)..."></textarea>
+                            </div>
+
+                            <div class="form-toggle-row">
+                                <div>
+                                    <div class="toggle-title">Автоматическое выполнение инструментов (Auto-Accept)</div>
+                                    <div class="form-hint">Выполнять shell-команды и запись файлов без ручного подтверждения</div>
+                                </div>
+                                <input type="checkbox" id="setting-auto-accept" class="toggle-switch">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 4: UPDATES -->
+                    <div class="settings-tab-pane" id="pane-updates" style="display: none;">
+                        <div class="pane-header-intro">
+                            <h2 class="pane-section-title">Обновления системы</h2>
+                            <p class="pane-hint">Проверка наличия новых версий NonRoot в официальном репозитории GitHub и установка в один клик.</p>
+                        </div>
+
+                        <div class="card-update-status">
+                            <div class="update-info-row">
+                                <span class="update-info-label">Текущая версия (коммит):</span>
+                                <span class="update-info-val" id="update-current-commit">...</span>
+                            </div>
+                            <div class="update-info-row">
+                                <span class="update-info-label">Статус:</span>
+                                <span class="update-info-val" id="update-check-status">Готово к проверке</span>
+                            </div>
+                            <div class="update-buttons-row">
+                                <button type="button" class="btn btn-secondary" id="btn-check-update-manual">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                    <span>Проверить обновления</span>
+                                </button>
+                                <button type="button" class="btn btn-primary hidden" id="btn-apply-update-modal">
+                                    <span>Обновить сейчас (git pull)</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-
-                <!-- TAB 2: GENERAL SETTINGS -->
-                <div class="settings-tab-pane" id="pane-general" style="display: none;">
-                    <div class="form-group">
-                        <label class="form-label">Рабочая директория по умолчанию</label>
-                        <input type="text" id="setting-workspace" class="form-input" placeholder="/">
-                        <div class="form-hint">Папка, в которой агент выполняет команды и создает файлы</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Лимит шагов цикла</label>
-                        <input type="number" id="setting-max-steps" class="form-input" value="30" min="5" max="100">
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Системные инструкции</label>
-                        <textarea id="setting-system-prompt" class="form-textarea" rows="3" placeholder="Специальные правила кодинга..."></textarea>
-                    </div>
-
-                    <div class="form-toggle-row">
-                        <div>
-                            <div class="toggle-title">Автоматическое выполнение инструментов (Auto-Accept)</div>
-                            <div class="form-hint">Выполнять shell-команды и запись файлов без ручного подтверждения</div>
-                        </div>
-                        <input type="checkbox" id="setting-auto-accept" class="toggle-switch">
-                    </div>
-                </div>
-
-                <!-- TAB 3: UPDATES -->
-                <div class="settings-tab-pane" id="pane-updates" style="display: none;">
-                    <div class="card-update-status">
-                        <div class="update-info-row">
-                            <span class="update-info-label">Текущая версия (коммит):</span>
-                            <span class="update-info-val" id="update-current-commit">...</span>
-                        </div>
-                        <div class="update-info-row">
-                            <span class="update-info-label">Статус:</span>
-                            <span class="update-info-val" id="update-check-status">Готово к проверке</span>
-                        </div>
-                        <div class="update-buttons-row">
-                            <button type="button" class="btn btn-secondary" id="btn-check-update-manual">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                                <span>Проверить обновления</span>
-                            </button>
-                            <button type="button" class="btn btn-primary hidden" id="btn-apply-update-modal">
-                                <span>Обновить сейчас (git pull)</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="btn-cancel-settings">Отмена</button>
-                <button class="btn btn-primary" id="btn-save-settings">Сохранить</button>
-            </div>
+            </main>
         </div>
     </div>
 

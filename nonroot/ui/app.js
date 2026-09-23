@@ -129,6 +129,15 @@ function getWorkspaceGroupName(workspace) {
     } catch (e) { return workspace; }
 }
 
+function safeGroupId(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return 'grp_' + Math.abs(hash).toString(36) + '_' + str.length;
+}
+
 function renderSessionsList() {
     if (!sessionsListEl) return;
     if (sessions.length === 0) {
@@ -149,10 +158,11 @@ function renderSessionsList() {
         const groupName = getWorkspaceGroupName(workspace);
         const isCollapsed = collapsedGroups.has(workspace);
         const hasActive = groupSessions.some(s => s.id === currentSessionId);
-        const groupId = 'grp-' + btoa(workspace).replace(/[^a-zA-Z0-9]/g, '_');
+        const groupId = safeGroupId(workspace);
+        const encodedWs = encodeURIComponent(workspace);
 
         html += `<div class="session-group ${hasActive ? 'has-active' : ''}" id="${groupId}">`;
-        html += `<div class="session-group-header" onclick="toggleGroup('${groupId}', '${workspace.replace(/'/g, "\\'")}')">
+        html += `<div class="session-group-header" onclick="toggleGroupEncoded('${encodedWs}')">
             <svg class="group-chevron ${isCollapsed ? 'collapsed' : ''}" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             <span class="group-name">${escapeHtml(groupName)}</span>
@@ -170,7 +180,7 @@ function renderSessionsList() {
                             <span class="session-title">${escapeHtml(s.title || 'Чат')}</span>
                             <span class="session-time">${timeStr}</span>
                         </div>
-                        <button class="session-delete" title="Удалить" onclick="deleteSession('${s.id}', event)">
+                        <button class="session-delete" title="Удалить чат" onclick="deleteSession('${s.id}', event)">
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                     </div>`;
@@ -183,6 +193,20 @@ function renderSessionsList() {
 
     sessionsListEl.innerHTML = html;
 }
+
+window.toggleGroupEncoded = function(encodedWs) {
+    try {
+        const workspace = decodeURIComponent(encodedWs);
+        if (collapsedGroups.has(workspace)) {
+            collapsedGroups.delete(workspace);
+        } else {
+            collapsedGroups.add(workspace);
+        }
+        renderSessionsList();
+    } catch (e) {
+        console.error('toggleGroup error:', e);
+    }
+};
 
 window.toggleGroup = function(groupId, workspace) {
     if (collapsedGroups.has(workspace)) {
@@ -220,6 +244,10 @@ window.deleteSession = function(id, event) {
     if (event) event.stopPropagation();
     if (isRunning) return;
     
+    if (!confirm('Вы уверены, что хотите удалить этот чат?')) {
+        return;
+    }
+    
     sessions = sessions.filter(s => s.id !== id);
     if (sessions.length === 0) {
         const newSess = createSessionObject('Новый чат');
@@ -247,6 +275,35 @@ if (btnNewChat) {
     btnNewChat.addEventListener('click', createNewChat);
 }
 
+window.rollbackToMessage = function(msgIndex) {
+    if (!confirm('Откатить диалог до этого действия? Сообщение вернется в поле ввода, а последующие ответы будут удалены.')) {
+        return;
+    }
+    const session = getActiveSession();
+    if (!session || !session.messages || msgIndex < 0 || msgIndex >= session.messages.length) return;
+
+    if (isRunning) {
+        fetch('/api/stop', { method: 'POST' }).catch(() => {});
+        setRunningState(false);
+    }
+
+    const targetMsg = session.messages[msgIndex];
+    if (targetMsg) {
+        promptInput.value = targetMsg.content || '';
+        if (targetMsg.images && Array.isArray(targetMsg.images)) {
+            attachedImages = [...targetMsg.images];
+            renderImagePreviews();
+        }
+        adjustTextareaHeight();
+        promptInput.focus();
+    }
+
+    // Truncate messages from this user message onwards
+    session.messages = session.messages.slice(0, msgIndex);
+    saveSessions();
+    loadActiveSession();
+};
+
 function loadActiveSession() {
     messagesFeed.innerHTML = '';
     activeAssistantCard = null;
@@ -256,13 +313,20 @@ function loadActiveSession() {
     const session = getActiveSession();
     if (!session || !session.messages || session.messages.length === 0) {
         welcomeScreen.classList.remove('hidden');
-        updateScopeUI(session ? session.workspace : currentWorkspace);
+        if (session && session.workspace) {
+            currentWorkspace = session.workspace;
+        }
+        updateWorkspaceDisplay(currentWorkspace, false);
         return;
     }
 
     welcomeScreen.classList.add('hidden');
+    if (session && session.workspace) {
+        currentWorkspace = session.workspace;
+        updateWorkspaceDisplay(currentWorkspace, false);
+    }
 
-    for (const msg of session.messages) {
+    session.messages.forEach((msg, idx) => {
         if (msg.role === 'user') {
             const userCard = document.createElement('div');
             userCard.className = 'message-card user';
@@ -272,7 +336,14 @@ function loadActiveSession() {
                     msg.images.map(img => `<img class="user-img-thumb" src="${img}">`).join('') + 
                     '</div>';
             }
-            userCard.innerHTML = `<div class="user-bubble">${escapeHtml(msg.content)}${imagesHtml}</div>`;
+            userCard.innerHTML = `
+                <div class="user-bubble-wrapper">
+                    <button class="btn-msg-rollback" type="button" title="Откатить до этого сообщения" onclick="rollbackToMessage(${idx})">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a5 5 0 0 1 5 5v2"/><polyline points="8 5 3 10 8 15"/></svg>
+                    </button>
+                    <div class="user-bubble">${escapeHtml(msg.content)}${imagesHtml}</div>
+                </div>
+            `;
             messagesFeed.appendChild(userCard);
         } else if (msg.role === 'assistant') {
             const card = document.createElement('div');
@@ -331,7 +402,7 @@ function loadActiveSession() {
 
             messagesFeed.appendChild(card);
         }
-    }
+    });
 
     scrollToBottom();
 }
@@ -340,7 +411,7 @@ function loadActiveSession() {
 // WORKSPACE SCOPE & MODAL
 // ============================================================================
 
-function updateWorkspaceDisplay(path) {
+function updateWorkspaceDisplay(path, saveToSession = true) {
     currentWorkspace = path || '/';
     const isRoot = currentWorkspace === '/' || currentWorkspace === '';
     const displayShort = isRoot ? 'Весь ПК' : currentWorkspace.split('/').filter(Boolean).pop() || currentWorkspace;
@@ -353,10 +424,13 @@ function updateWorkspaceDisplay(path) {
 
     updateScopeUI(currentWorkspace);
 
-    const session = getActiveSession();
-    if (session) {
-        session.workspace = currentWorkspace;
-        saveSessions();
+    if (saveToSession) {
+        const session = getActiveSession();
+        if (session) {
+            session.workspace = currentWorkspace;
+            saveSessions();
+            renderSessionsList();
+        }
     }
 }
 
@@ -678,15 +752,18 @@ let currentAssistantTurn = null;
 function handleAgentEvent(evt) {
     switch (evt.type) {
         case 'init':
-            if (evt.workspace) updateWorkspaceDisplay(evt.workspace);
-            if (evt.model) modelSelect.value = evt.model;
+            if (evt.workspace) updateWorkspaceDisplay(evt.workspace, false);
+            if (evt.model) {
+                if (modelSelect) modelSelect.value = evt.model;
+                updateModelLabels(evt.model);
+            }
             if (evt.is_running) {
                 setRunningState(true);
             }
             break;
 
         case 'workspace_updated':
-            updateWorkspaceDisplay(evt.workspace);
+            updateWorkspaceDisplay(evt.workspace, false);
             break;
 
         case 'status':
@@ -1123,7 +1200,15 @@ function submitPrompt() {
             attachedImages.map(img => `<img class="user-img-thumb" src="${img}">`).join('') + 
             '</div>';
     }
-    userCard.innerHTML = `<div class="user-bubble">${escapeHtml(text)}${imagesHtml}</div>`;
+    const userMsgIndex = session ? session.messages.length - 1 : 0;
+    userCard.innerHTML = `
+        <div class="user-bubble-wrapper">
+            <button class="btn-msg-rollback" type="button" title="Откатить до этого сообщения" onclick="rollbackToMessage(${userMsgIndex})">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a5 5 0 0 1 5 5v2"/><polyline points="8 5 3 10 8 15"/></svg>
+            </button>
+            <div class="user-bubble">${escapeHtml(text)}${imagesHtml}</div>
+        </div>
+    `;
     messagesFeed.appendChild(userCard);
 
     activeAssistantCard = null;
@@ -1361,7 +1446,7 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
-[settingsModal, workspaceModal, subagentModal].forEach(modal => {
+[workspaceModal, subagentModal].forEach(modal => {
     if (modal) {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
@@ -1496,13 +1581,136 @@ if (btnApplyUpdateModal) {
     });
 }
 
-// Load Models dynamically from API
+// ==========================================
+// Custom Model Picker & Popover Management
+// ==========================================
+let allModelsList = [];
+
+function updateModelLabels(modelId) {
+    if (!modelId) return;
+    const found = allModelsList.find(m => m.id === modelId);
+    const label = found ? (found.name || found.id) : modelId;
+    const topLabel = document.getElementById('top-model-label');
+    const bottomLabel = document.getElementById('bottom-model-label');
+    if (topLabel) topLabel.textContent = label;
+    if (bottomLabel) bottomLabel.textContent = label;
+}
+
+function renderModelPickerItems(filterQuery = '') {
+    const listEl = document.getElementById('model-picker-list');
+    if (!listEl) return;
+
+    const q = filterQuery.toLowerCase().trim();
+    const filtered = allModelsList.filter(m => {
+        if (!q) return true;
+        return (m.id && m.id.toLowerCase().includes(q)) ||
+               (m.name && m.name.toLowerCase().includes(q)) ||
+               (m.desc && m.desc.toLowerCase().includes(q)) ||
+               (m.group && m.group.toLowerCase().includes(q));
+    });
+
+    if (filtered.length === 0) {
+        listEl.innerHTML = '<div class="model-picker-empty">Модели не найдены</div>';
+        return;
+    }
+
+    // Group models
+    const groups = {};
+    for (const m of filtered) {
+        const grp = m.group || 'Модели';
+        if (!groups[grp]) groups[grp] = [];
+        groups[grp].push(m);
+    }
+
+    const currentVal = modelSelect ? modelSelect.value : 'deepseek-chat';
+    let html = '';
+    for (const [groupName, groupModels] of Object.entries(groups)) {
+        html += `<div class="model-picker-group">`;
+        html += `<div class="model-picker-group-title">${escapeHtml(groupName)}</div>`;
+        for (const mod of groupModels) {
+            const isSelected = mod.id === currentVal;
+            const desc = mod.desc || (mod.id === 'deepseek-chat' ? 'DeepSeek-V3 · Универсальная и быстрая модель' : (mod.id === 'deepseek-reasoner' ? 'DeepSeek-R1 · Рассуждения и логика' : ''));
+            const isBuiltin = mod.group && mod.group.includes('Встроенный');
+            html += `
+                <div class="model-picker-item ${isSelected ? 'active' : ''}" onclick="selectModel('${escapeHtml(mod.id)}')">
+                    <div class="model-item-info">
+                        <div class="model-item-title-row">
+                            <span class="model-item-name">${escapeHtml(mod.name || mod.id)}</span>
+                            ${isBuiltin ? '<span class="model-item-badge">Встроенная</span>' : ''}
+                        </div>
+                        ${desc ? `<span class="model-item-desc">${escapeHtml(desc)}</span>` : ''}
+                    </div>
+                    ${isSelected ? `
+                        <div class="model-item-check">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        html += `</div>`;
+    }
+    listEl.innerHTML = html;
+}
+
+window.selectModel = function(modelId) {
+    if (modelSelect) {
+        modelSelect.value = modelId;
+    }
+    updateModelLabels(modelId);
+    hideModelPickerPopover();
+};
+
+function showModelPickerPopover(anchorEl) {
+    const popover = document.getElementById('model-picker-popover');
+    if (!popover || !anchorEl) return;
+
+    renderModelPickerItems('');
+    const searchInput = document.getElementById('model-search-input');
+    if (searchInput) searchInput.value = '';
+
+    popover.classList.remove('hidden');
+
+    const rect = anchorEl.getBoundingClientRect();
+    const popoverWidth = 320;
+    const popoverHeight = 350;
+
+    let left = rect.left;
+    if (left + popoverWidth > window.innerWidth - 12) {
+        left = window.innerWidth - popoverWidth - 12;
+    }
+    if (left < 12) left = 12;
+
+    if (rect.bottom + popoverHeight > window.innerHeight - 10) {
+        // Open upwards
+        let top = rect.top - popoverHeight - 8;
+        if (top < 10) top = 10;
+        popover.style.top = top + 'px';
+    } else {
+        // Open downwards
+        popover.style.top = (rect.bottom + 6) + 'px';
+    }
+    popover.style.left = left + 'px';
+
+    if (searchInput) {
+        setTimeout(() => searchInput.focus(), 60);
+    }
+}
+
+function hideModelPickerPopover() {
+    const popover = document.getElementById('model-picker-popover');
+    if (popover && !popover.classList.contains('hidden')) {
+        popover.classList.add('hidden');
+    }
+}
+
 function loadModelsList() {
     fetch('/api/models')
         .then(r => r.json())
         .then(data => {
             if (data.models && data.models.length > 0) {
-                const currentVal = modelSelect.value;
+                allModelsList = data.models;
+                const currentVal = modelSelect.value || 'deepseek-chat';
                 const existingGroup = {};
                 for (const m of data.models) {
                     const grp = m.group || 'Модели';
@@ -1518,11 +1726,64 @@ function loadModelsList() {
                     optionsHtml += `</optgroup>`;
                 }
                 modelSelect.innerHTML = optionsHtml;
-                if (currentVal) modelSelect.value = currentVal;
+                if (currentVal && allModelsList.some(m => m.id === currentVal)) {
+                    modelSelect.value = currentVal;
+                } else if (allModelsList.length > 0) {
+                    modelSelect.value = allModelsList[0].id;
+                }
+                updateModelLabels(modelSelect.value);
             }
         })
         .catch(() => {});
 }
+
+const btnTopModel = document.getElementById('btn-top-model-trigger');
+const btnBottomModel = document.getElementById('btn-bottom-model-trigger');
+
+if (btnTopModel) {
+    btnTopModel.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const popover = document.getElementById('model-picker-popover');
+        if (popover && !popover.classList.contains('hidden')) {
+            hideModelPickerPopover();
+        } else {
+            showModelPickerPopover(btnTopModel);
+        }
+    });
+}
+
+if (btnBottomModel) {
+    btnBottomModel.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const popover = document.getElementById('model-picker-popover');
+        if (popover && !popover.classList.contains('hidden')) {
+            hideModelPickerPopover();
+        } else {
+            showModelPickerPopover(btnBottomModel);
+        }
+    });
+}
+
+const modelSearchInput = document.getElementById('model-search-input');
+if (modelSearchInput) {
+    modelSearchInput.addEventListener('input', (e) => {
+        renderModelPickerItems(e.target.value);
+    });
+    modelSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') hideModelPickerPopover();
+    });
+}
+
+document.addEventListener('click', (e) => {
+    const popover = document.getElementById('model-picker-popover');
+    if (popover && !popover.classList.contains('hidden')) {
+        if (!popover.contains(e.target) && 
+            (!btnTopModel || !btnTopModel.contains(e.target)) &&
+            (!btnBottomModel || !btnBottomModel.contains(e.target))) {
+            hideModelPickerPopover();
+        }
+    }
+});
 
 // ==========================================
 // DeepSeek Auth & Token Management
