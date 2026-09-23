@@ -19,6 +19,20 @@ from typing import Optional, Dict, Any, List
 
 from nonroot.config import config_manager
 from nonroot.engine.agent import AutonomousAgent
+from nonroot.auth import (
+    ensure_default_auth,
+    get_auth_info,
+    get_browser_auth_status,
+    launch_browser_auth,
+    revert_to_backup,
+    restore_factory_default,
+    save_custom_token
+)
+
+try:
+    ensure_default_auth()
+except Exception:
+    pass
 
 if getattr(sys, '_MEIPASS', None):
     UI_DIR = Path(sys._MEIPASS) / "nonroot" / "ui"
@@ -228,6 +242,14 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(config_manager.config)
             return
 
+        if path == "/api/auth/status":
+            self._send_json(get_auth_info())
+            return
+
+        if path == "/api/auth/browser/status":
+            self._send_json(get_browser_auth_status())
+            return
+
         if path == "/api/update/check":
             try:
                 from nonroot.updater import check_for_updates
@@ -386,6 +408,27 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
                 self._send_json(res)
             except Exception as e:
                 self._send_json({"success": False, "error": str(e)})
+            return
+
+        if path == "/api/auth/browser":
+            res = launch_browser_auth()
+            self._send_json(res)
+            return
+
+        if path == "/api/auth/revert":
+            res = revert_to_backup()
+            self._send_json(res)
+            return
+
+        if path == "/api/auth/restore-default":
+            res = restore_factory_default()
+            self._send_json(res)
+            return
+
+        if path == "/api/auth/custom":
+            raw_token = body.get("token", "")
+            res = save_custom_token(raw_token)
+            self._send_json(res)
             return
 
         self.send_error(404, "Not Found")

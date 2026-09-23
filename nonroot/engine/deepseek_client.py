@@ -65,6 +65,7 @@ def auto_start_deepseek_proxy(target_port: int = 9655) -> bool:
             env = os.environ.copy()
             env["NON_INTERACTIVE"] = "1"
             env["PORT"] = str(target_port)
+            env["DEEPSEEK_AUTH_PATH"] = str(Path.home() / ".nonroot" / "deepseek-auth.json")
             log_dir = Path.home() / ".nonroot"
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = log_dir / "deepseek_proxy.log"

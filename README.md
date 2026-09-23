@@ -21,6 +21,20 @@ NonRoot спроектирован как легковесный автоном�
 
 ---
 
+## Скачать готовые сборки (Releases)
+
+Готовые скомпилированные версии доступны на странице **[GitHub Releases](https://github.com/nadaroot/deepsekagent/releases)**:
+
+| Платформа | Формат | Описание | Ссылка на загрузку |
+|---|---|---|---|
+| **Windows (x64)** | `.zip` / `.exe` | Windows 10 / 11 64-bit | [NonRoot-Windows-x64.zip](https://github.com/nadaroot/deepsekagent/releases/latest/download/NonRoot-Windows-x64.zip) |
+| **macOS (Apple Silicon)** | `.zip` | M1 / M2 / M3 / M4 (arm64) | [NonRoot-macos-arm64.zip](https://github.com/nadaroot/deepsekagent/releases/latest/download/NonRoot-macos-arm64.zip) |
+| **macOS (Intel)** | `.zip` | Intel x86_64 | [NonRoot-macos-x64.zip](https://github.com/nadaroot/deepsekagent/releases/latest/download/NonRoot-macos-x64.zip) |
+| **Linux (x64)** | `.tar.gz` | Ubuntu / Debian / Fedora / Arch | [NonRoot-linux-x64.tar.gz](https://github.com/nadaroot/deepsekagent/releases/latest/download/NonRoot-linux-x64.tar.gz) |
+| **Исходный код** | `.zip` | Полный репозиторий и исходники | [NonRoot-source-code.zip](https://github.com/nadaroot/deepsekagent/releases/latest/download/NonRoot-source-code.zip) |
+
+---
+
 ## Интеграция с DeepSeek API
 
 NonRoot полностью совместим со стандартом OpenAI Chat Completions API и оптимизирован для работы с локальным или удаленным прокси-сервером **[FreeDeepseekAPI](https://github.com/nadaroot/freedeepseek)**.

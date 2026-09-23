@@ -1336,11 +1336,13 @@ btnOpenSettings.addEventListener('click', () => {
             settingAutoAccept.checked = !!cfg.auto_accept_tools;
             settingsModal.classList.remove('hidden');
 
+            fetchAuthStatus();
             checkForUpdates(true);
         })
         .catch(err => {
             console.error('Failed to load settings:', err);
             settingsModal.classList.remove('hidden');
+            fetchAuthStatus();
         });
 });
 
@@ -1522,11 +1524,178 @@ function loadModelsList() {
         .catch(() => {});
 }
 
+// ==========================================
+// DeepSeek Auth & Token Management
+// ==========================================
+const authTokenPreview = document.getElementById('auth-token-preview');
+const authStatusBadge = document.getElementById('auth-status-badge');
+const authSourceBadge = document.getElementById('auth-source-badge');
+const authBackupPreview = document.getElementById('auth-backup-preview');
+const btnAuthBrowser = document.getElementById('btn-auth-browser');
+const authBrowserStatusText = document.getElementById('auth-browser-status-text');
+const btnAuthRevert = document.getElementById('btn-auth-revert');
+const btnAuthRestoreDefault = document.getElementById('btn-auth-restore-default');
+const authCustomTokenInput = document.getElementById('auth-custom-token-input');
+const btnAuthSaveCustom = document.getElementById('btn-auth-save-custom');
+
+let browserAuthPollTimer = null;
+
+function fetchAuthStatus() {
+    fetch('/api/auth/status')
+        .then(r => r.json())
+        .then(data => {
+            if (authTokenPreview) {
+                authTokenPreview.textContent = data.token_preview || 'Не задан';
+            }
+            if (authStatusBadge) {
+                if (data.has_token) {
+                    authStatusBadge.textContent = 'Активен';
+                    authStatusBadge.className = 'auth-status-badge badge-active';
+                } else {
+                    authStatusBadge.textContent = 'Не задан';
+                    authStatusBadge.className = 'auth-status-badge';
+                }
+            }
+            if (authSourceBadge) {
+                if (data.is_default) {
+                    authSourceBadge.textContent = 'Встроенный (заводской)';
+                } else {
+                    authSourceBadge.textContent = 'Пользовательский';
+                }
+            }
+            if (authBackupPreview) {
+                authBackupPreview.textContent = data.backup_preview || 'Нет';
+            }
+            if (btnAuthRevert) {
+                btnAuthRevert.disabled = !data.has_backup;
+                btnAuthRevert.title = data.has_backup 
+                    ? `Вернуть предыдущий токен (${data.backup_preview})` 
+                    : 'Нет сохраненного резервного токена';
+            }
+        })
+        .catch(err => {
+            console.error('Failed to load auth status:', err);
+        });
+}
+
+function pollBrowserAuth() {
+    if (browserAuthPollTimer) clearInterval(browserAuthPollTimer);
+    
+    browserAuthPollTimer = setInterval(() => {
+        fetch('/api/auth/browser/status')
+            .then(r => r.json())
+            .then(st => {
+                if (authBrowserStatusText) {
+                    authBrowserStatusText.textContent = st.message || 'Ожидание авторизации...';
+                }
+                if (!st.running) {
+                    clearInterval(browserAuthPollTimer);
+                    browserAuthPollTimer = null;
+                    if (btnAuthBrowser) btnAuthBrowser.disabled = false;
+                    fetchAuthStatus();
+                    loadModelsList();
+                }
+            })
+            .catch(() => {
+                clearInterval(browserAuthPollTimer);
+                browserAuthPollTimer = null;
+                if (btnAuthBrowser) btnAuthBrowser.disabled = false;
+            });
+    }, 1500);
+}
+
+if (btnAuthBrowser) {
+    btnAuthBrowser.addEventListener('click', () => {
+        btnAuthBrowser.disabled = true;
+        if (authBrowserStatusText) {
+            authBrowserStatusText.classList.remove('hidden');
+            authBrowserStatusText.textContent = 'Запуск Google Chrome...';
+        }
+        fetch('/api/auth/browser', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    pollBrowserAuth();
+                } else {
+                    alert(data.error || 'Не удалось запустить браузер');
+                    btnAuthBrowser.disabled = false;
+                    if (authBrowserStatusText) authBrowserStatusText.classList.add('hidden');
+                }
+            })
+            .catch(err => {
+                alert('Ошибка связи с сервером: ' + err.message);
+                btnAuthBrowser.disabled = false;
+                if (authBrowserStatusText) authBrowserStatusText.classList.add('hidden');
+            });
+    });
+}
+
+if (btnAuthRevert) {
+    btnAuthRevert.addEventListener('click', () => {
+        if (!confirm('Вернуть предыдущий сохраненный токен?')) return;
+        fetch('/api/auth/revert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    fetchAuthStatus();
+                    alert(data.message || 'Предыдущий токен восстановлен!');
+                } else {
+                    alert(data.error || 'Не удалось вернуть токен');
+                }
+            })
+            .catch(err => alert('Ошибка: ' + err.message));
+    });
+}
+
+if (btnAuthRestoreDefault) {
+    btnAuthRestoreDefault.addEventListener('click', () => {
+        if (!confirm('Восстановить встроенный заводской токен? Текущий токен будет сохранен в резервной копии.')) return;
+        fetch('/api/auth/restore-default', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    fetchAuthStatus();
+                    alert(data.message || 'Встроенный токен восстановлен!');
+                } else {
+                    alert(data.error || 'Ошибка восстановления токена');
+                }
+            })
+            .catch(err => alert('Ошибка: ' + err.message));
+    });
+}
+
+if (btnAuthSaveCustom) {
+    btnAuthSaveCustom.addEventListener('click', () => {
+        const val = (authCustomTokenInput ? authCustomTokenInput.value : '').trim();
+        if (!val) {
+            alert('Введите токен или вставьте JSON deepseek-auth.json');
+            return;
+        }
+        fetch('/api/auth/custom', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: val })
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    if (authCustomTokenInput) authCustomTokenInput.value = '';
+                    fetchAuthStatus();
+                    alert(data.message || 'Пользовательский токен успешно применен!');
+                } else {
+                    alert(data.error || 'Ошибка применения токена');
+                }
+            })
+            .catch(err => alert('Ошибка: ' + err.message));
+    });
+}
+
 // Initialize on Load
 window.addEventListener('DOMContentLoaded', () => {
     initSessions();
     connectSSE();
     loadModelsList();
+    fetchAuthStatus();
     setTimeout(() => checkForUpdates(true), 2000);
 });
 

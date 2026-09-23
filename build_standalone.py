@@ -55,8 +55,21 @@ def build():
         f"--name={bin_name}",
         "--onefile",
         "--clean",
+        "--noconfirm",
         f"--add-data={add_data_ui}",
         f"--add-data={add_data_assets}",
+        "--collect-all=nonroot",
+        "--hidden-import=nonroot",
+        "--hidden-import=nonroot.auth",
+        "--hidden-import=nonroot.config",
+        "--hidden-import=nonroot.server",
+        "--hidden-import=nonroot.updater",
+        "--hidden-import=nonroot.cli",
+        "--hidden-import=nonroot.engine.agent",
+        "--hidden-import=nonroot.engine.deepseek_client",
+        "--hidden-import=nonroot.engine.prompts",
+        "--hidden-import=nonroot.engine.subagents",
+        "--hidden-import=nonroot.engine.tools",
         "--hidden-import=json",
         "--hidden-import=queue",
         "--hidden-import=threading",
@@ -65,6 +78,12 @@ def build():
         "--hidden-import=http.server",
         "--hidden-import=mimetypes"
     ]
+
+    ds_folder = base_dir.parent / "deepseek-api"
+    if not ds_folder.exists():
+        ds_folder = base_dir / "deepseek-api"
+    if ds_folder.exists():
+        cmd.append(f"--add-data={str(ds_folder)}{sep}deepseek-api")
 
     if icon_path:
         cmd.append(f"--icon={icon_path}")

@@ -241,14 +241,81 @@
 
             <!-- Settings Tabs Header -->
             <div class="settings-tabs-header">
-                <button type="button" class="settings-tab-btn active" data-tab="pane-providers">Провайдеры и API-ключи</button>
+                <button type="button" class="settings-tab-btn active" data-tab="pane-auth">Токен DeepSeek</button>
+                <button type="button" class="settings-tab-btn" data-tab="pane-providers">Провайдеры и API-ключи</button>
                 <button type="button" class="settings-tab-btn" data-tab="pane-general">Параметры агента</button>
                 <button type="button" class="settings-tab-btn" data-tab="pane-updates">Обновления</button>
             </div>
 
             <div class="modal-body">
-                <!-- TAB 1: PROVIDERS & EXTRA API KEYS -->
-                <div class="settings-tab-pane active" id="pane-providers">
+                <!-- TAB 1: DEEPSEEK AUTH & TOKEN MANAGEMENT -->
+                <div class="settings-tab-pane active" id="pane-auth">
+                    <div class="pane-hint">Встроенный токен DeepSeek активен сразу. Вы можете запустить браузер для повторного входа, вернуть предыдущий токен или загрузить свой.</div>
+
+                    <!-- Token Status Card -->
+                    <div class="auth-token-card">
+                        <div class="auth-card-header">
+                            <div class="auth-card-title-group">
+                                <span class="auth-card-title">Текущий токен DeepSeek</span>
+                                <span class="auth-status-badge badge-active" id="auth-status-badge">Активен</span>
+                            </div>
+                            <span class="auth-source-badge" id="auth-source-badge">Встроенный</span>
+                        </div>
+
+                        <div class="auth-token-preview-row">
+                            <span class="auth-preview-code" id="auth-token-preview">Загрузка...</span>
+                        </div>
+
+                        <div class="auth-backup-info-row">
+                            <span class="auth-backup-label">Резервная копия старого токена:</span>
+                            <span class="auth-backup-val" id="auth-backup-preview">Нет</span>
+                        </div>
+                    </div>
+
+                    <!-- Browser Login Section -->
+                    <div class="auth-section-card">
+                        <div class="auth-section-title">Авторизация через браузер</div>
+                        <div class="auth-section-desc">Открывает окно Google Chrome на странице chat.deepseek.com. Войдите в свой аккаунт — NonRoot автоматически перехватит токен, сохранит старый токен в резервную копию и применит новый.</div>
+                        <div class="auth-browser-actions">
+                            <button type="button" class="btn btn-primary" id="btn-auth-browser">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="14.83" y1="9.17" x2="18.36" y2="5.64"/><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/></svg>
+                                <span>Запустить браузер для авторизации</span>
+                            </button>
+                            <span class="auth-browser-status hidden" id="auth-browser-status-text">Ожидание авторизации...</span>
+                        </div>
+                    </div>
+
+                    <!-- Token Backup / Revert / Restore Factory Section -->
+                    <div class="auth-section-card">
+                        <div class="auth-section-title">Управление токенами и возврат</div>
+                        <div class="auth-section-desc">Вы можете в любой момент откатиться на сохраненный предыдущий токен или сбросить всё на встроенный рабочий токен.</div>
+                        <div class="auth-buttons-row">
+                            <button type="button" class="btn btn-secondary" id="btn-auth-revert" disabled title="Вернуть предыдущий сохраненный токен">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                                <span>Вернуть старый токен</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="btn-auth-restore-default" title="Восстановить встроенный заводской токен из поставки">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                <span>Сбросить на встроенный токен</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Custom Token Import Section -->
+                    <div class="auth-section-card">
+                        <div class="auth-section-title">Загрузить или вставить свой токен</div>
+                        <div class="auth-section-desc">Вставьте токен вручную или JSON-конфигурацию deepseek-auth.json:</div>
+                        <textarea class="form-textarea auth-token-input" id="auth-custom-token-input" rows="2" placeholder="Вставьте токен (например NNqBskEP...) или весь JSON..."></textarea>
+                        <div class="auth-buttons-row" style="margin-top: 8px;">
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-auth-save-custom">
+                                <span>Применить свой токен</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: PROVIDERS & EXTRA API KEYS -->
+                <div class="settings-tab-pane" id="pane-providers" style="display: none;">
                     <div class="pane-hint">Настройте ключи для подключения любых нейросетей (OpenAI, OpenRouter, DeepSeek, Groq, Ollama). Модели появятся в верхнем меню.</div>
                     
                     <div class="providers-list" id="providers-list">

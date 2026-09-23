@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release Tag (e.g. v1.0.0)'
+        description: 'Release Tag (e.g. v1.1.0)'
         required: false
-        default: 'v1.0.0'
+        default: 'v1.1.0'
 
 permissions:
   contents: write
@@ -31,8 +31,11 @@ jobs:
             os_label: Windows (x64)
             platform: windows
           - os: macos-latest
-            os_label: macOS (arm64)
+            os_label: macOS (Apple Silicon arm64)
             platform: macos-arm64
+          - os: macos-13
+            os_label: macOS (Intel x64)
+            platform: macos-x64
           - os: ubuntu-22.04
             os_label: Linux (x64)
             platform: linux-x64
@@ -63,15 +66,16 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifacts
           Copy-Item dist\NonRoot.exe artifacts\NonRoot.exe
           Copy-Item dist\NonRoot.exe artifacts\NonRoot-Windows-x64.exe
+          Compress-Archive -Path dist\NonRoot.exe,scripts\install_windows_shortcut.ps1,scripts\setup_windows.bat -DestinationPath artifacts\NonRoot-Windows-x64.zip
           Get-ChildItem artifacts
 
       - name: Package macOS Artifacts
-        if: matrix.platform == 'macos-arm64'
+        if: startsWith(matrix.platform, 'macos')
         run: |
           mkdir -p artifacts
           chmod +x dist/NonRoot
           cd dist
-          zip -9 ../artifacts/NonRoot-macos-arm64.zip NonRoot
+          zip -9 ../artifacts/NonRoot-${{ matrix.platform }}.zip NonRoot
           cd ..
           ls -la artifacts/
 
@@ -94,52 +98,78 @@ jobs:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine Tag Name
+        id: vars
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            echo "tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=v1.1.0" >> $GITHUB_OUTPUT
+          fi
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: release_download
 
-      - name: Flatten and list release assets
+      - name: Prepare release assets and source archives
         run: |
           mkdir -p release_assets
           find release_download -type f -exec cp {} release_assets/ \;
+          git archive --format=zip --output=release_assets/NonRoot-source-code.zip HEAD
+          git archive --format=tar.gz --output=release_assets/NonRoot-source-code.tar.gz HEAD
           ls -la release_assets/
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
-          name: NonRoot Release ${{ github.event.inputs.tag_name || github.ref_name }}
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: NonRoot Release ${{ steps.vars.outputs.tag }}
           body: |
             ### NonRoot — Autonomous AI Agent (OpenCode 1:1)
 
-            NonRoot — полностью автономный локальный ИИ-агент разработки на базе DeepSeek API (V3 & R1) с веб-интерфейсом в стиле OpenCode, инструментами выполнения команд, редактирования файлов и поддержкой параллельных субагентов.
+            NonRoot — автономный локальный ИИ-агент разработки на базе DeepSeek API (V3 & R1) с веб-интерфейсом в стиле OpenCode, инструментами выполнения команд, редактирования файлов и поддержкой параллельных субагентов.
 
             ---
 
-            ### Загрузка сборок (Downloads):
+            ### Скачать готовые сборки (Downloads):
 
             #### Windows:
-            - [`NonRoot.exe`](https://github.com/nadaroot/nonroot/releases/download/${{ github.event.inputs.tag_name || github.ref_name }}/NonRoot.exe) — Запуск в 1 клик
+            - **[`NonRoot-Windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/NonRoot-Windows-x64.zip)** — ZIP-архив с программой (рекомендуется)
+            - **[`NonRoot.exe`](https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/NonRoot.exe)** — Исполняемый файл для прямого запуска
 
             #### macOS:
-            - [`NonRoot-macos-arm64.zip`](https://github.com/nadaroot/nonroot/releases/download/${{ github.event.inputs.tag_name || github.ref_name }}/NonRoot-macos-arm64.zip) — Apple Silicon (M1/M2/M3/M4)
+            - **[`NonRoot-macos-arm64.zip`](https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/NonRoot-macos-arm64.zip)** — Apple Silicon (M1 / M2 / M3 / M4)
+            - **[`NonRoot-macos-x64.zip`](https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/NonRoot-macos-x64.zip)** — Intel Mac
 
             #### Linux:
-            - [`NonRoot-linux-x64.tar.gz`](https://github.com/nadaroot/nonroot/releases/download/${{ github.event.inputs.tag_name || github.ref_name }}/NonRoot-linux-x64.tar.gz) — x86_64
+            - **[`NonRoot-linux-x64.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/NonRoot-linux-x64.tar.gz)** — Linux x86_64
+
+            #### Исходный код (Source Code):
+            - **[`NonRoot-source-code.zip`](https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/NonRoot-source-code.zip)** — Полный архив исходного кода
+            - **[`NonRoot-source-code.tar.gz`](https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/NonRoot-source-code.tar.gz)** — tar.gz архив
 
             ---
 
-            ### Возможности:
-            - **OpenCode 1:1 UI**: Глубокая темная тема, карточки выполнения инструментов, стриминг рассуждений `<think>`.
-            - **Автономный ReAct цикл**: Выполнение shell-команд, чтение, запись и точечное редактирование файлов, поиск по коду, чтение веб-страниц.
-            - **Параллельные субагенты**: Запуск и координация независимых подзадач.
-            - **Мультимодальность и фото**: Загрузка скриншотов и фото в диалог.
-            - **Режим Auto-Accept**: Переключатель автоматического подтверждения действий.
-            - **Ярлыки и интеграция**: Команда `nonroot` в терминале и ярлык рабочего стола.
+            ### Что нового в этом релизе:
+            - **Встроенный рабочий токен DeepSeek**: Приложение готово к работе сразу при запуске.
+            - **Управление авторизацией в настройках**:
+              - Кнопка «Запустить браузер для авторизации» — вход через реальный Chrome с авто-перехватом токена.
+              - Сохранение резервной копии старого токена при любой смене.
+              - Кнопка «Вернуть старый токен» — мгновенный откат.
+              - Кнопка «Сбросить на встроенный токен» — сброс на заводской рабочий токен.
+              - Поле ручного ввода / загрузки своего токена или JSON конфигурации.
+            - **Поддержка сторонних провайдеров**: Подключение ключей OpenAI, OpenRouter, Groq, Ollama.
+            - **Быстрый диалог проводника**: Моментальный выбор рабочей папки.
+            - **Строгий разработческий дизайн**: Лаконичный интерфейс без лишних декораций.
           files: release_assets/*
           draft: false
           prerelease: false
