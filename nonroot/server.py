@@ -10,6 +10,7 @@ import time
 import queue
 import threading
 import mimetypes
+import subprocess
 import urllib.parse
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -25,6 +26,78 @@ if getattr(sys, '_MEIPASS', None):
 else:
     UI_DIR = Path(__file__).parent / "ui"
     ASSETS_DIR = Path(__file__).parent.parent / "assets"
+
+def pick_folder_native(initial_dir: Optional[str] = None) -> Optional[str]:
+    """Opens a native operating system folder selection dialog."""
+    system = sys.platform
+
+    if system == "darwin":
+        script = '''
+        tell application "System Events"
+            activate
+            set chosenFolder to choose folder with prompt "Выберите рабочую папку для NonRoot:"
+            return POSIX path of chosenFolder
+        end tell
+        '''
+        try:
+            p = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=60)
+            if p.returncode == 0:
+                res = p.stdout.strip()
+                if res:
+                    return res
+        except Exception:
+            pass
+
+    elif system == "win32":
+        ps_script = '''
+        Add-Type -AssemblyName System.Windows.Forms
+        $f = New-Object System.Windows.Forms.FolderBrowserDialog
+        $f.Description = "Выберите рабочую папку для NonRoot"
+        $f.ShowNewFolderButton = $true
+        if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            Write-Output $f.SelectedPath
+        }
+        '''
+        try:
+            p = subprocess.run(["powershell", "-NoProfile", "-Command", ps_script], capture_output=True, text=True, timeout=60)
+            if p.returncode == 0:
+                res = p.stdout.strip()
+                if res:
+                    return res
+        except Exception:
+            pass
+
+    elif system.startswith("linux"):
+        for cmd in [
+            ["zenity", "--file-selection", "--directory", "--title=Выберите рабочую папку для NonRoot"],
+            ["kdialog", "--getexistingdirectory", "--title", "Выберите рабочую папку для NonRoot"]
+        ]:
+            try:
+                p = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                if p.returncode == 0:
+                    res = p.stdout.strip()
+                    if res:
+                        return res
+            except Exception:
+                continue
+
+    # NOTE: Tkinter is NOT used as fallback on macOS — it attempts to create a second
+    # NSApplication from a background thread inside our Cocoa app, causing SIGABRT.
+    if system != "darwin":
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            selected = filedialog.askdirectory(title="Выберите рабочую папку для NonRoot", initialdir=initial_dir)
+            root.destroy()
+            if selected:
+                return selected
+        except Exception:
+            pass
+
+    return None
 
 class EventBroadcaster:
     def __init__(self):
@@ -105,9 +178,12 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
+
+    def do_HEAD(self):
+        self.do_GET()
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -184,13 +260,24 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
             self._send_file(UI_DIR / "style.css", "text/css; charset=utf-8")
         elif path == "/app.js":
             self._send_file(UI_DIR / "app.js", "application/javascript; charset=utf-8")
-        elif path == "/favicon.png":
-            self._send_file(ASSETS_DIR / "favicon.png", "image/png")
+        elif path in ["/favicon.ico", "/favicon.png", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"]:
+            fav = ASSETS_DIR / "favicon.png"
+            if not fav.exists():
+                fav = UI_DIR / "favicon.png"
+            self._send_file(fav, "image/png")
         elif path == "/logo.png":
-            self._send_file(ASSETS_DIR / "logo.png", "image/png")
+            logo = ASSETS_DIR / "logo.png"
+            if not logo.exists():
+                logo = UI_DIR / "logo.png"
+            self._send_file(logo, "image/png")
+        elif path == "/icon.svg":
+            svg = ASSETS_DIR / "icon.svg"
+            if not svg.exists():
+                svg = UI_DIR / "icon.svg"
+            self._send_file(svg, "image/svg+xml")
         else:
             cand = UI_DIR / path.lstrip("/")
-            if cand.exists():
+            if cand.exists() and cand.is_file():
                 self._send_file(cand)
             else:
                 self.send_error(404, "Not Found")
@@ -210,20 +297,53 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
             prompt = body.get("prompt", "").strip()
             images = body.get("images", [])
             model = body.get("model")
+            workspace = body.get("workspace")
             if model:
                 active_agent.model = model
+            if workspace:
+                active_agent.update_settings(workspace=workspace)
+                config_manager.set("workspace", str(active_agent.workspace))
             
             if not prompt:
                 self._send_json({"error": "Prompt cannot be empty"}, status=400)
                 return
 
             success, msg = active_agent.run_task(prompt=prompt, images=images)
-            self._send_json({"success": success, "message": msg})
+            self._send_json({"success": success, "message": msg, "workspace": str(active_agent.workspace)})
             return
 
         if path == "/api/stop":
             active_agent.stop()
             self._send_json({"success": True, "message": "Agent stopped"})
+            return
+
+        if path == "/api/workspace/set":
+            new_ws = body.get("workspace", "/").strip()
+            if not new_ws:
+                new_ws = "/"
+            ws_path = Path(new_ws).resolve()
+            active_agent.update_settings(workspace=str(ws_path))
+            config_manager.set("workspace", str(ws_path))
+            broadcaster.broadcast({
+                "type": "workspace_updated",
+                "workspace": str(ws_path)
+            })
+            self._send_json({"success": True, "workspace": str(ws_path)})
+            return
+
+        if path == "/api/workspace/pick":
+            picked = pick_folder_native()
+            if picked:
+                ws_path = Path(picked).resolve()
+                active_agent.update_settings(workspace=str(ws_path))
+                config_manager.set("workspace", str(ws_path))
+                broadcaster.broadcast({
+                    "type": "workspace_updated",
+                    "workspace": str(ws_path)
+                })
+                self._send_json({"success": True, "workspace": str(ws_path)})
+            else:
+                self._send_json({"success": False, "cancelled": True, "workspace": str(active_agent.workspace)})
             return
 
         if path == "/api/tools/confirm":

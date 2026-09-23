@@ -58,7 +58,7 @@ def check_existing_instance() -> bool:
         with urllib.request.urlopen(req, timeout=1) as resp:
             if resp.status == 200:
                 url = f"http://127.0.0.1:{port}"
-                safe_print(f"[*] NonRoot is already active at {url}. Bringing window to front...")
+                safe_print(f"[*] NonRoot is already active at {url}. Opening window...")
                 launch_app_in_browser(url)
                 return True
     except Exception:
@@ -73,12 +73,11 @@ def record_instance(port: int):
         pass
 
 def launch_app_in_browser(url: str):
-    """Launches Chrome/Chromium in dedicated borderless standalone window mode, or default browser."""
+    """Launches Chrome/Chromium in standalone app window mode or default system browser."""
     system = sys.platform
     launched = False
 
     if system == "darwin":
-        profile_dir = str(log_dir / "chrome_app_profile")
         browser_candidates = [
             "/Applications/Google Chrome.app",
             os.path.expanduser("~/Applications/Google Chrome.app"),
@@ -90,15 +89,9 @@ def launch_app_in_browser(url: str):
             if os.path.exists(app_path):
                 try:
                     subprocess.Popen([
-                        "open", "-n", "-a", app_path,
+                        "open", "-a", app_path,
                         "--args",
-                        f"--app={url}",
-                        f"--user-data-dir={profile_dir}",
-                        "--no-first-run",
-                        "--no-default-browser-check",
-                        "--disable-sync",
-                        "--disable-extensions",
-                        "--window-size=1200,800"
+                        f"--app={url}"
                     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     launched = True
                     break
@@ -115,7 +108,6 @@ def launch_app_in_browser(url: str):
         env_prog = os.environ.get("PROGRAMFILES", "C:\\Program Files")
         env_prog86 = os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)")
         env_local = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
-        profile_dir = str(log_dir / "chrome_app_profile")
         
         candidates = [
             os.path.join(env_prog, "Google\\Chrome\\Application\\chrome.exe"),
@@ -131,10 +123,7 @@ def launch_app_in_browser(url: str):
                 try:
                     subprocess.Popen([
                         c,
-                        f"--app={url}",
-                        f"--user-data-dir={profile_dir}",
-                        "--no-first-run",
-                        "--window-size=1200,800"
+                        f"--app={url}"
                     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     launched = True
                     break

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 DEFAULT_CONFIG = {
-    "api_base_url": "http://127.0.0.1:3000/v1",
+    "api_base_url": "http://127.0.0.1:9655/v1",
     "api_key": "sk-nonroot-free",
     "model": "deepseek-chat",
     "auto_accept_tools": True,

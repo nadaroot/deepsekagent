@@ -23,12 +23,90 @@ DEEPSEEK_MODELS = [
     {"id": "deepseek-math-7b-instruct", "name": "DeepSeek Math 7B", "desc": "Математическая логика и формулы", "group": "Специализированные"}
 ]
 
+import os
+import time
+import socket
+import subprocess
+from pathlib import Path
+
+def is_local_port_open(port: int) -> bool:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.4)
+        res = s.connect_ex(("127.0.0.1", port))
+        s.close()
+        return res == 0
+    except Exception:
+        return False
+
+def auto_start_deepseek_proxy(target_port: int = 9655) -> bool:
+    if is_local_port_open(target_port) or is_local_port_open(3000):
+        return True
+
+    candidates = [
+        Path.home() / ".nonroot" / "deepseek-api" / "server.js",
+        Path.home() / "Applications" / "NonRoot.app" / "Contents" / "Resources" / "deepseek-api" / "server.js",
+        Path("/Users/mac/Documents/strim/playerok/deepseek-api/server.js"),
+        Path(__file__).parent.parent.parent.parent / "deepseek-api" / "server.js",
+        Path(__file__).parent.parent.parent / "deepseek-api" / "server.js",
+    ]
+
+    node_exec = None
+    for n in ["/usr/local/bin/node", "/opt/homebrew/bin/node", "/usr/bin/node"]:
+        if os.path.exists(n) and os.access(n, os.X_OK):
+            node_exec = n
+            break
+
+    if not node_exec:
+        return False
+
+    for s_path in candidates:
+        if s_path.exists():
+            env = os.environ.copy()
+            env["NON_INTERACTIVE"] = "1"
+            env["PORT"] = str(target_port)
+            log_dir = Path.home() / ".nonroot"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = log_dir / "deepseek_proxy.log"
+            try:
+                f = open(log_file, "a")
+                subprocess.Popen(
+                    [node_exec, str(s_path)],
+                    cwd=str(s_path.parent),
+                    env=env,
+                    stdout=f,
+                    stderr=f
+                )
+                # Wait up to 3 seconds for proxy to start
+                for _ in range(30):
+                    time.sleep(0.1)
+                    if is_local_port_open(target_port):
+                        return True
+            except Exception:
+                pass
+    return False
+
 class DeepSeekClient:
-    def __init__(self, api_base_url: str = "http://127.0.0.1:3000/v1", api_key: str = "sk-nonroot-free"):
+    def __init__(self, api_base_url: str = "http://127.0.0.1:9655/v1", api_key: str = "sk-nonroot-free"):
         self.api_base_url = api_base_url.rstrip("/")
         self.api_key = api_key or "sk-nonroot-free"
 
+    def _ensure_endpoint_ready(self):
+        if "127.0.0.1" in self.api_base_url or "localhost" in self.api_base_url:
+            if "9655" in self.api_base_url:
+                if not is_local_port_open(9655):
+                    auto_start_deepseek_proxy(9655)
+            elif "3000" in self.api_base_url:
+                if not is_local_port_open(3000):
+                    if is_local_port_open(9655):
+                        self.api_base_url = "http://127.0.0.1:9655/v1"
+                    else:
+                        auto_start_deepseek_proxy(9655)
+                        if is_local_port_open(9655):
+                            self.api_base_url = "http://127.0.0.1:9655/v1"
+
     def list_models(self) -> List[Dict[str, Any]]:
+        self._ensure_endpoint_ready()
         models = list(DEEPSEEK_MODELS)
         try:
             url = f"{self.api_base_url}/models"
@@ -63,6 +141,7 @@ class DeepSeekClient:
         tools: Optional[List[Dict[str, Any]]] = None,
         images: Optional[List[str]] = None
     ) -> Generator[Dict[str, Any], None, None]:
+        self._ensure_endpoint_ready()
         url = f"{self.api_base_url}/chat/completions"
         
         # Prepare messages payload

@@ -1,4 +1,4 @@
-// NonRoot Autonomous AI Agent - Front-End Logic (OpenCode 1:1)
+// NonRoot Autonomous AI Agent - Front-End Logic
 
 let eventSource = null;
 let isRunning = false;
@@ -10,6 +10,9 @@ let activeContentEl = null;
 // Sessions State
 let sessions = [];
 let currentSessionId = null;
+let currentWorkspace = '/';
+let subagentsData = {}; // subagent_id -> { id, role, prompt, status, events: [], result: null }
+let activeModalSubagentId = null;
 
 // DOM Elements
 const chatContainer = document.getElementById('chat-container');
@@ -19,17 +22,38 @@ const promptInput = document.getElementById('prompt-input');
 const btnSend = document.getElementById('btn-send-prompt');
 const btnStop = document.getElementById('btn-stop-agent');
 const modelSelect = document.getElementById('model-select');
-const statusBadge = document.getElementById('agent-status-badge');
-const statusText = document.getElementById('agent-status-text');
+const statusBadge = null; // removed from UI
+const statusText = null;  // removed from UI
 const workspacePathEl = document.getElementById('workspace-path');
-const subagentsListEl = document.getElementById('subagents-list');
+const workspacePill = document.getElementById('workspace-pill');
+const btnTopWorkspace = document.getElementById('btn-top-workspace');
+const topWorkspaceName = document.getElementById('top-workspace-name');
 const sessionsListEl = document.getElementById('sessions-list');
 const btnNewChat = document.getElementById('btn-new-chat');
-const btnToggleRightSidebar = document.getElementById('btn-toggle-right-sidebar');
-const sidebarRight = document.getElementById('sidebar-right');
 const fileInput = document.getElementById('file-input');
 const btnAttach = document.getElementById('btn-attach-image');
 const imagePreviewStrip = document.getElementById('image-preview-strip');
+
+// Scope Elements
+const scopeCardRoot = document.getElementById('scope-card-root');
+const scopeCardFolder = document.getElementById('scope-card-folder');
+const scopeFolderDesc = document.getElementById('scope-folder-desc');
+
+// Workspace Modal
+const workspaceModal = document.getElementById('workspace-modal');
+const inputModalWorkspace = document.getElementById('input-modal-workspace');
+const btnSaveWorkspace = document.getElementById('btn-save-workspace');
+const btnCancelWorkspace = document.getElementById('btn-cancel-workspace');
+const btnCloseWorkspace = document.getElementById('btn-close-workspace');
+
+// Subagent Modal
+const subagentModal = document.getElementById('subagent-modal');
+const subagentModalStatus = document.getElementById('subagent-modal-status');
+const subagentModalRole = document.getElementById('subagent-modal-role');
+const subagentModalPrompt = document.getElementById('subagent-modal-prompt');
+const subagentModalFeed = document.getElementById('subagent-modal-feed');
+const btnCloseSubagent = document.getElementById('btn-close-subagent');
+const btnDismissSubagent = document.getElementById('btn-dismiss-subagent');
 
 // Settings Elements
 const settingsModal = document.getElementById('settings-modal');
@@ -77,7 +101,8 @@ function createSessionObject(title) {
         id: 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
         title: title || 'Новый чат',
         createdAt: Date.now(),
-        messages: [] // Array of { role, content, images, reasoning, tools: [] }
+        workspace: currentWorkspace || '/',
+        messages: [] // Array of { role, content, images, reasoning, tools: [], subagents: [] }
     };
 }
 
@@ -93,6 +118,17 @@ function getActiveSession() {
     return sessions.find(s => s.id === currentSessionId);
 }
 
+// Track which workspace groups are collapsed
+const collapsedGroups = new Set();
+
+function getWorkspaceGroupName(workspace) {
+    if (!workspace || workspace === '/' || workspace === 'whole_machine') return 'Весь ПК';
+    try {
+        const parts = workspace.replace(/\/$/, '').split('/');
+        return parts[parts.length - 1] || workspace;
+    } catch (e) { return workspace; }
+}
+
 function renderSessionsList() {
     if (!sessionsListEl) return;
     if (sessions.length === 0) {
@@ -100,22 +136,63 @@ function renderSessionsList() {
         return;
     }
 
-    sessionsListEl.innerHTML = sessions.map(s => {
-        const isActive = s.id === currentSessionId;
-        const timeStr = formatSessionTime(s.createdAt);
-        return `
-            <div class="session-item ${isActive ? 'active' : ''}" onclick="switchSession('${s.id}')">
-                <div class="session-info">
-                    <span class="session-title">${escapeHtml(s.title || 'Чат')}</span>
-                    <span class="session-time">${timeStr}</span>
-                </div>
-                <button class="session-delete" title="Удалить чат" onclick="deleteSession('${s.id}', event)">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-            </div>
-        `;
-    }).join('');
+    // Group sessions by workspace
+    const groups = new Map(); // workspace -> sessions[]
+    sessions.forEach(s => {
+        const ws = s.workspace || '/';
+        if (!groups.has(ws)) groups.set(ws, []);
+        groups.get(ws).push(s);
+    });
+
+    let html = '';
+    groups.forEach((groupSessions, workspace) => {
+        const groupName = getWorkspaceGroupName(workspace);
+        const isCollapsed = collapsedGroups.has(workspace);
+        const hasActive = groupSessions.some(s => s.id === currentSessionId);
+        const groupId = 'grp-' + btoa(workspace).replace(/[^a-zA-Z0-9]/g, '_');
+
+        html += `<div class="session-group ${hasActive ? 'has-active' : ''}" id="${groupId}">`;
+        html += `<div class="session-group-header" onclick="toggleGroup('${groupId}', '${workspace.replace(/'/g, "\\'")}')">
+            <svg class="group-chevron ${isCollapsed ? 'collapsed' : ''}" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span class="group-name">${escapeHtml(groupName)}</span>
+            <span class="group-count">${groupSessions.length}</span>
+        </div>`;
+
+        if (!isCollapsed) {
+            html += `<div class="session-group-items">`;
+            groupSessions.forEach(s => {
+                const isActive = s.id === currentSessionId;
+                const timeStr = formatSessionTime(s.createdAt);
+                html += `
+                    <div class="session-item ${isActive ? 'active' : ''}" onclick="switchSession('${s.id}')">
+                        <div class="session-info">
+                            <span class="session-title">${escapeHtml(s.title || 'Чат')}</span>
+                            <span class="session-time">${timeStr}</span>
+                        </div>
+                        <button class="session-delete" title="Удалить" onclick="deleteSession('${s.id}', event)">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>`;
+            });
+            html += `</div>`;
+        }
+
+        html += `</div>`;
+    });
+
+    sessionsListEl.innerHTML = html;
 }
+
+window.toggleGroup = function(groupId, workspace) {
+    if (collapsedGroups.has(workspace)) {
+        collapsedGroups.delete(workspace);
+    } else {
+        collapsedGroups.add(workspace);
+    }
+    renderSessionsList();
+};
+
 
 function formatSessionTime(timestamp) {
     if (!timestamp) return '';
@@ -170,12 +247,6 @@ if (btnNewChat) {
     btnNewChat.addEventListener('click', createNewChat);
 }
 
-if (btnToggleRightSidebar && sidebarRight) {
-    btnToggleRightSidebar.addEventListener('click', () => {
-        sidebarRight.classList.toggle('collapsed');
-    });
-}
-
 function loadActiveSession() {
     messagesFeed.innerHTML = '';
     activeAssistantCard = null;
@@ -185,6 +256,7 @@ function loadActiveSession() {
     const session = getActiveSession();
     if (!session || !session.messages || session.messages.length === 0) {
         welcomeScreen.classList.remove('hidden');
+        updateScopeUI(session ? session.workspace : currentWorkspace);
         return;
     }
 
@@ -224,21 +296,29 @@ function loadActiveSession() {
 
             if (msg.tools && msg.tools.length > 0) {
                 for (const tool of msg.tools) {
-                    const toolCard = document.createElement('div');
-                    toolCard.className = 'tool-card';
-                    const isSuccess = tool.success !== false;
-                    toolCard.innerHTML = `
-                        <div class="tool-header">
-                            <span class="tool-name-badge">
-                                <span class="tool-icon-glyph">›_</span>
-                                ${escapeHtml(tool.name)} 
-                                <span style="color:var(--text-muted);font-weight:normal;">${escapeHtml(tool.summary || '')}</span>
-                            </span>
-                            <span class="tool-status-tag ${isSuccess ? 'success' : 'error'}">${isSuccess ? 'успешно' : 'ошибка'}</span>
-                        </div>
-                        <div class="tool-body">${escapeHtml(tool.output || tool.error || '')}</div>
-                    `;
-                    card.appendChild(toolCard);
+                    if (tool.name === 'spawn_subagent' || tool.is_subagent) {
+                        const subId = tool.subagent_id;
+                        const subRole = tool.subagent_role || 'Субагент';
+                        const subPrompt = tool.subagent_prompt || '';
+                        const subCard = createSubagentChatCard(subId, subRole, subPrompt, tool.status || 'completed');
+                        card.appendChild(subCard);
+                    } else {
+                        const toolCard = document.createElement('div');
+                        toolCard.className = 'tool-card';
+                        const isSuccess = tool.success !== false;
+                        toolCard.innerHTML = `
+                            <div class="tool-header">
+                                <span class="tool-name-badge">
+                                    <span class="tool-icon-glyph">›_</span>
+                                    ${escapeHtml(tool.name)} 
+                                    <span style="color:var(--text-muted);font-weight:normal;">${escapeHtml(tool.summary || '')}</span>
+                                </span>
+                                <span class="tool-status-tag ${isSuccess ? 'success' : 'error'}">${isSuccess ? 'успешно' : 'ошибка'}</span>
+                            </div>
+                            <div class="tool-body">${escapeHtml(tool.output || tool.error || '')}</div>
+                        `;
+                        card.appendChild(toolCard);
+                    }
                 }
             }
 
@@ -255,6 +335,208 @@ function loadActiveSession() {
 
     scrollToBottom();
 }
+
+// ============================================================================
+// WORKSPACE SCOPE & MODAL
+// ============================================================================
+
+function updateWorkspaceDisplay(path) {
+    currentWorkspace = path || '/';
+    const isRoot = currentWorkspace === '/' || currentWorkspace === '';
+    const displayShort = isRoot ? 'Весь ПК' : currentWorkspace.split('/').filter(Boolean).pop() || currentWorkspace;
+    const displayFull = isRoot ? 'Весь ПК (Корень /)' : currentWorkspace;
+
+    if (workspacePathEl) workspacePathEl.textContent = displayFull;
+    if (topWorkspaceName) topWorkspaceName.textContent = displayShort;
+    const inputScopeName = document.getElementById('input-scope-name');
+    if (inputScopeName) inputScopeName.textContent = displayShort;
+
+    updateScopeUI(currentWorkspace);
+
+    const session = getActiveSession();
+    if (session) {
+        session.workspace = currentWorkspace;
+        saveSessions();
+    }
+}
+
+function updateScopeUI(path) {
+    const isRoot = !path || path === '/' || path === '';
+    if (scopeCardRoot && scopeCardFolder) {
+        if (isRoot) {
+            scopeCardRoot.classList.add('active');
+            scopeCardFolder.classList.remove('active');
+            if (scopeFolderDesc) scopeFolderDesc.textContent = 'Ограничить контекст конкретным проектом';
+        } else {
+            scopeCardRoot.classList.remove('active');
+            scopeCardFolder.classList.add('active');
+            if (scopeFolderDesc) scopeFolderDesc.textContent = path;
+        }
+    }
+}
+
+window.pickWorkspaceFolder = function() {
+    fetch('/api/workspace/pick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    }).then(r => r.json()).then(res => {
+        if (res.success && res.workspace) {
+            updateWorkspaceDisplay(res.workspace);
+            closeWorkspaceModal();
+        }
+    }).catch(err => {
+        console.error('Folder picker error:', err);
+    });
+};
+
+window.selectWorkspaceScope = function(path) {
+    const target = path || '/';
+    fetch('/api/workspace/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace: target })
+    }).then(r => r.json()).then(res => {
+        if (res.success) {
+            updateWorkspaceDisplay(res.workspace);
+            closeWorkspaceModal();
+        }
+    }).catch(err => {
+        console.error('Failed to set workspace:', err);
+    });
+};
+
+function openWorkspaceModal() {
+    if (inputModalWorkspace) {
+        inputModalWorkspace.value = currentWorkspace === '/' ? '' : currentWorkspace;
+    }
+    if (workspaceModal) {
+        workspaceModal.classList.remove('hidden');
+        if (inputModalWorkspace) inputModalWorkspace.focus();
+    }
+}
+window.openWorkspaceModal = openWorkspaceModal;
+
+function closeWorkspaceModal() {
+    if (workspaceModal) workspaceModal.classList.add('hidden');
+}
+
+if (workspacePill) workspacePill.addEventListener('click', openWorkspaceModal);
+if (btnTopWorkspace) btnTopWorkspace.addEventListener('click', openWorkspaceModal);
+if (btnCloseWorkspace) btnCloseWorkspace.addEventListener('click', closeWorkspaceModal);
+if (btnCancelWorkspace) btnCancelWorkspace.addEventListener('click', closeWorkspaceModal);
+
+if (btnSaveWorkspace) {
+    btnSaveWorkspace.addEventListener('click', () => {
+        const val = inputModalWorkspace.value.trim() || '/';
+        selectWorkspaceScope(val);
+    });
+}
+
+// ============================================================================
+// IN-CHAT SUBAGENT RENDERING & MODAL
+// ============================================================================
+
+function createSubagentChatCard(subId, role, prompt, status) {
+    const card = document.createElement('div');
+    card.className = 'subagent-chat-card';
+    card.id = `subagent-chat-${subId}`;
+    
+    const statusClass = status === 'completed' ? 'completed' : (status === 'error' ? 'error' : '');
+    const statusLabel = status === 'completed' ? 'Завершено' : (status === 'error' ? 'Ошибка' : 'Выполняется...');
+
+    card.innerHTML = `
+        <div class="subagent-chat-info">
+            <div class="subagent-chat-header">
+                <span class="subagent-chat-role">${escapeHtml(role || 'Субагент')}</span>
+                <span class="subagent-chat-badge ${statusClass}" id="subagent-badge-${subId}">${statusLabel}</span>
+            </div>
+            <div class="subagent-chat-prompt">${escapeHtml(prompt || '')}</div>
+        </div>
+        <button class="btn-open-subagent" onclick="openSubagentModal('${subId}')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+            <span>Открыть чат</span>
+        </button>
+    `;
+    return card;
+}
+
+window.openSubagentModal = function(subagentId) {
+    activeModalSubagentId = subagentId;
+    const sub = subagentsData[subagentId];
+
+    if (!sub) {
+        fetch('/api/subagents')
+            .then(r => r.json())
+            .then(data => {
+                const found = (data.subagents || []).find(s => s.id === subagentId);
+                if (found) {
+                    subagentsData[subagentId] = found;
+                    renderSubagentModalContent(found);
+                }
+            });
+    } else {
+        renderSubagentModalContent(sub);
+    }
+
+    if (subagentModal) subagentModal.classList.remove('hidden');
+};
+
+function renderSubagentModalContent(sub) {
+    if (!sub) return;
+    if (subagentModalRole) subagentModalRole.textContent = `Субагент: ${sub.role || 'Помощник'}`;
+    if (subagentModalPrompt) subagentModalPrompt.textContent = sub.prompt || '';
+    
+    const isCompleted = sub.status === 'completed';
+    const isError = sub.status === 'error';
+    if (subagentModalStatus) {
+        subagentModalStatus.className = 'subagent-modal-badge ' + (isCompleted ? 'completed' : (isError ? 'error' : ''));
+        subagentModalStatus.textContent = isCompleted ? 'Завершено' : (isError ? 'Ошибка' : 'Выполняется');
+    }
+
+    if (subagentModalFeed) {
+        subagentModalFeed.innerHTML = '';
+        if (sub.events && sub.events.length > 0) {
+            for (const ev of sub.events) {
+                appendSubagentModalEvent(ev);
+            }
+        } else {
+            subagentModalFeed.innerHTML = '<div style="color:var(--text-muted);padding:10px;">Ожидание действий субагента...</div>';
+        }
+    }
+}
+
+function appendSubagentModalEvent(ev) {
+    if (!subagentModalFeed) return;
+    const item = document.createElement('div');
+    item.className = 'subagent-log-step';
+
+    if (ev.type === 'reasoning') {
+        item.classList.add('reasoning');
+        item.innerHTML = `<strong>Мысли:</strong> ${escapeHtml(ev.delta || ev.full || '')}`;
+    } else if (ev.type === 'tool_start') {
+        item.classList.add('tool');
+        item.innerHTML = `<strong>Инструмент:</strong> <code>${escapeHtml(ev.tool)}</code> ${escapeHtml(JSON.stringify(ev.args || {}))}`;
+    } else if (ev.type === 'tool_end') {
+        item.classList.add('tool');
+        const out = ev.result ? (ev.result.output || ev.result.error || '') : '';
+        item.innerHTML = `<strong>Результат (${escapeHtml(ev.tool)}):</strong> <pre style="margin-top:4px;white-space:pre-wrap;">${escapeHtml(out)}</pre>`;
+    } else if (ev.type === 'finished') {
+        item.classList.add('result');
+        item.innerHTML = `<strong>Итог:</strong> ${escapeHtml(ev.result || '')}`;
+    } else {
+        item.textContent = `[${ev.type}] ${escapeHtml(JSON.stringify(ev))}`;
+    }
+    subagentModalFeed.appendChild(item);
+    subagentModalFeed.scrollTop = subagentModalFeed.scrollHeight;
+}
+
+function closeSubagentModal() {
+    activeModalSubagentId = null;
+    if (subagentModal) subagentModal.classList.add('hidden');
+}
+
+if (btnCloseSubagent) btnCloseSubagent.addEventListener('click', closeSubagentModal);
+if (btnDismissSubagent) btnDismissSubagent.addEventListener('click', closeSubagentModal);
 
 // ============================================================================
 // PROMPT & TEXTAREA
@@ -348,27 +630,23 @@ function connectSSE() {
 }
 
 function updateStatus(status, text) {
-    if (status === 'idle' || !text || text === 'Готов') {
-        statusBadge.classList.add('hidden');
-    } else {
-        statusBadge.classList.remove('hidden');
-        statusBadge.className = 'status-badge ' + status;
-        statusText.textContent = text;
-    }
+    // Status badge removed from UI — no-op
 }
-
 
 let currentAssistantTurn = null;
 
 function handleAgentEvent(evt) {
     switch (evt.type) {
         case 'init':
-            workspacePathEl.textContent = evt.workspace || '...';
+            if (evt.workspace) updateWorkspaceDisplay(evt.workspace);
             if (evt.model) modelSelect.value = evt.model;
-            if (evt.subagents) renderSubagents(evt.subagents);
             if (evt.is_running) {
                 setRunningState(true);
             }
+            break;
+
+        case 'workspace_updated':
+            updateWorkspaceDisplay(evt.workspace);
             break;
 
         case 'status':
@@ -408,25 +686,54 @@ function handleAgentEvent(evt) {
 
         case 'tool_start':
             ensureAssistantCard();
-            renderToolStart(evt.id, evt.name, evt.args);
+            if (evt.name === 'spawn_subagent') {
+                const subId = (evt.args && evt.args.id) || 'sub_' + Date.now();
+                renderSubagentChatStart(subId, evt.args.role, evt.args.prompt);
+            } else {
+                renderToolStart(evt.id, evt.name, evt.args);
+            }
             updateStatus('executing', `${evt.name}`);
             break;
 
         case 'tool_end':
-            updateToolEnd(evt.id, evt.name, evt.result);
-            if (currentAssistantTurn) {
-                if (!currentAssistantTurn.tools) currentAssistantTurn.tools = [];
-                currentAssistantTurn.tools.push({
-                    name: evt.name,
-                    success: evt.result.success,
-                    output: evt.result.output,
-                    error: evt.result.error
-                });
+            if (evt.name === 'spawn_subagent' || (evt.result && evt.result.is_subagent)) {
+                const subId = evt.result.subagent_id;
+                const subRole = evt.result.subagent_role || 'Субагент';
+                const subPrompt = evt.result.subagent_prompt || '';
+                subagentsData[subId] = {
+                    id: subId,
+                    role: subRole,
+                    prompt: subPrompt,
+                    status: 'running',
+                    events: []
+                };
+                renderSubagentChatStart(subId, subRole, subPrompt);
+                if (currentAssistantTurn) {
+                    if (!currentAssistantTurn.tools) currentAssistantTurn.tools = [];
+                    currentAssistantTurn.tools.push({
+                        name: 'spawn_subagent',
+                        subagent_id: subId,
+                        subagent_role: subRole,
+                        subagent_prompt: subPrompt,
+                        is_subagent: true
+                    });
+                }
+            } else {
+                updateToolEnd(evt.id, evt.name, evt.result);
+                if (currentAssistantTurn) {
+                    if (!currentAssistantTurn.tools) currentAssistantTurn.tools = [];
+                    currentAssistantTurn.tools.push({
+                        name: evt.name,
+                        success: evt.result.success,
+                        output: evt.result.output,
+                        error: evt.result.error
+                    });
+                }
             }
             break;
 
         case 'subagent_event':
-            refreshSubagents();
+            handleSubagentStreamEvent(evt);
             break;
 
         case 'task_completed':
@@ -443,6 +750,57 @@ function handleAgentEvent(evt) {
             updateStatus('idle', 'Ошибка');
             saveSessions();
             break;
+    }
+}
+
+function renderSubagentChatStart(subId, role, prompt) {
+    let existing = document.getElementById(`subagent-chat-${subId}`);
+    if (!existing) {
+        const card = createSubagentChatCard(subId, role, prompt, 'running');
+        activeAssistantCard.appendChild(card);
+        scrollToBottom();
+    }
+}
+
+function handleSubagentStreamEvent(evt) {
+    const sId = evt.subagent_id;
+    if (!sId) return;
+
+    if (!subagentsData[sId]) {
+        subagentsData[sId] = {
+            id: sId,
+            role: evt.role || 'Субагент',
+            prompt: '',
+            status: 'running',
+            events: []
+        };
+    }
+
+    subagentsData[sId].events.push(evt);
+
+    if (evt.type === 'finished') {
+        subagentsData[sId].status = 'completed';
+        const badge = document.getElementById(`subagent-badge-${sId}`);
+        if (badge) {
+            badge.className = 'subagent-chat-badge completed';
+            badge.textContent = 'Завершено';
+        }
+    } else if (evt.type === 'error') {
+        subagentsData[sId].status = 'error';
+        const badge = document.getElementById(`subagent-badge-${sId}`);
+        if (badge) {
+            badge.className = 'subagent-chat-badge error';
+            badge.textContent = 'Ошибка';
+        }
+    }
+
+    if (activeModalSubagentId === sId && subagentModal && !subagentModal.classList.contains('hidden')) {
+        appendSubagentModalEvent(evt);
+        if (evt.type === 'finished' || evt.type === 'error') {
+            const isCompleted = evt.type === 'finished';
+            subagentModalStatus.className = 'subagent-modal-badge ' + (isCompleted ? 'completed' : 'error');
+            subagentModalStatus.textContent = isCompleted ? 'Завершено' : 'Ошибка';
+        }
     }
 }
 
@@ -572,7 +930,6 @@ function renderToolStart(id, name, args) {
     if (name === 'run_command') argSummary = args.command || '';
     else if (name === 'read_file' || name === 'write_file' || name === 'edit_file') argSummary = args.path || '';
     else if (name === 'web_fetch') argSummary = args.url || '';
-    else if (name === 'spawn_subagent') argSummary = `${args.role}: ${args.prompt}`;
 
     card.innerHTML = `
         <div class="tool-header">
@@ -610,15 +967,71 @@ function updateToolEnd(id, name, result) {
 }
 
 function formatMarkdown(raw) {
-    let html = escapeHtml(raw);
-    html = html.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    if (!raw) return '';
+    // Strip tool_call and internal JSON invocation blocks so assistant communicates in normal text
+    let clean = raw
+        .replace(/```tool_call[\s\S]*?```/gi, '')
+        .replace(/```json\s*\{\s*"tool_call"[\s\S]*?```/gi, '')
+        .replace(/\{\s*"tool_call"\s*:\s*\{[\s\S]*?\}\s*\}/gi, '')
+        .trim();
+
+    if (!clean && /tool_call/i.test(raw)) {
+        return '<span class="action-narrative">Выполняю действия...</span>';
+    }
+
+    let html = escapeHtml(clean);
+
+    // Code blocks with Antigravity header & copy button
+    html = html.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+        const langLabel = lang || 'code';
+        return `
+            <div class="code-block-wrapper">
+                <div class="code-block-header">
+                    <span class="code-block-lang">${escapeHtml(langLabel)}</span>
+                    <button class="copy-code-btn" onclick="copyCode(this)" title="Копировать">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        <span>Копировать</span>
+                    </button>
+                </div>
+                <pre><code>${code}</code></pre>
+            </div>
+        `;
+    });
+
+    // Headers
+    html = html.replace(/^### (.*$)/gim, '<h3 class="md-h3">$1</h3>');
+    html = html.replace(/^## (.*$)/gim, '<h2 class="md-h2">$1</h2>');
+    html = html.replace(/^# (.*$)/gim, '<h1 class="md-h1">$1</h1>');
+
+    // Inline elements
+    html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    html = html.replace(/\n\n/g, '<p></p>');
+
+    // Lists
+    html = html.replace(/^\s*[-*]\s+(.*)$/gim, '<div class="md-list-item">• $1</div>');
+    html = html.replace(/^\s*(\d+)\.\s+(.*)$/gim, '<div class="md-list-item"><span class="list-num">$1.</span> $2</div>');
+
+    // Paragraphs
+    html = html.replace(/\n\n/g, '<div class="md-para-gap"></div>');
     html = html.replace(/\n/g, '<br>');
     return html;
 }
+
+window.copyCode = function(button) {
+    const codeEl = button.closest('.code-block-wrapper').querySelector('code');
+    if (!codeEl) return;
+    navigator.clipboard.writeText(codeEl.innerText).then(() => {
+        const span = button.querySelector('span');
+        const orig = span.textContent;
+        span.textContent = 'Скопировано!';
+        button.classList.add('copied');
+        setTimeout(() => {
+            span.textContent = orig;
+            button.classList.remove('copied');
+        }, 2000);
+    });
+};
 
 function escapeHtml(str) {
     return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -681,7 +1094,8 @@ function submitPrompt() {
     const payload = {
         prompt: text,
         images: [...attachedImages],
-        model: modelSelect.value
+        model: modelSelect.value,
+        workspace: currentWorkspace
     };
 
     attachedImages = [];
@@ -704,30 +1118,6 @@ function submitPrompt() {
 btnStop.addEventListener('click', () => {
     fetch('/api/stop', { method: 'POST' });
 });
-
-// Subagents rendering
-function renderSubagents(subagents) {
-    if (!subagents || subagents.length === 0) {
-        subagentsListEl.innerHTML = '<div class="empty-subagents">Нет активных субагентов</div>';
-        return;
-    }
-    subagentsListEl.innerHTML = subagents.map(s => `
-        <div class="subagent-item">
-            <div class="subagent-header">
-                <span class="subagent-role">${escapeHtml(s.role)}</span>
-                <span class="subagent-status ${s.status}">${s.status}</span>
-            </div>
-            <div style="font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(s.prompt)}</div>
-        </div>
-    `).join('');
-}
-
-function refreshSubagents() {
-    fetch('/api/subagents')
-        .then(r => r.json())
-        .then(data => renderSubagents(data.subagents))
-        .catch(() => {});
-}
 
 // ============================================================================
 // SETTINGS MODAL
@@ -757,16 +1147,23 @@ btnOpenSettings.addEventListener('click', () => {
     }
 });
 
-// Close modal on Escape or background click
+// Close modals on Escape
 window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !settingsModal.classList.contains('hidden')) {
-        settingsModal.classList.add('hidden');
+    if (e.key === 'Escape') {
+        if (settingsModal && !settingsModal.classList.contains('hidden')) settingsModal.classList.add('hidden');
+        if (workspaceModal && !workspaceModal.classList.contains('hidden')) workspaceModal.classList.add('hidden');
+        if (subagentModal && !subagentModal.classList.contains('hidden')) closeSubagentModal();
     }
 });
 
-settingsModal.addEventListener('click', (e) => {
-    if (e.target === settingsModal) {
-        settingsModal.classList.add('hidden');
+[settingsModal, workspaceModal, subagentModal].forEach(modal => {
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.add('hidden');
+                if (modal === subagentModal) activeModalSubagentId = null;
+            }
+        });
     }
 });
 
@@ -786,7 +1183,7 @@ btnSaveSettings.addEventListener('click', () => {
     }).then(r => r.json()).then(data => {
         settingsModal.classList.add('hidden');
         if (updates.workspace) {
-            workspacePathEl.textContent = updates.workspace;
+            updateWorkspaceDisplay(updates.workspace);
         }
     }).catch(err => {
         alert('Ошибка при сохранении настроек: ' + err);
@@ -827,3 +1224,4 @@ window.addEventListener('DOMContentLoaded', () => {
     connectSSE();
     loadModelsList();
 });
+

@@ -32,6 +32,7 @@ class Subagent:
         self.finished_at = None
         self.result = None
         self.error = None
+        self.events: List[Dict[str, Any]] = []
         self.thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
 
@@ -45,13 +46,15 @@ class Subagent:
         self.finished_at = int(time.time())
 
     def _emit(self, event_type: str, data: Dict[str, Any]):
+        payload = {
+            "subagent_id": self.id,
+            "role": self.role,
+            "type": event_type,
+            "timestamp": time.time(),
+            **data
+        }
+        self.events.append(payload)
         if self.on_event:
-            payload = {
-                "subagent_id": self.id,
-                "role": self.role,
-                "type": event_type,
-                **data
-            }
             self.on_event(payload)
 
     def _run_loop(self):
@@ -138,8 +141,8 @@ class Subagent:
             self.finished_at = int(time.time())
             self._emit("finished", {"result": self.result})
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
+    def to_dict(self, include_events: bool = True) -> Dict[str, Any]:
+        d = {
             "id": self.id,
             "role": self.role,
             "prompt": self.prompt,
@@ -150,6 +153,9 @@ class Subagent:
             "result": self.result,
             "error": self.error
         }
+        if include_events:
+            d["events"] = self.events
+        return d
 
 class SubagentManager:
     def __init__(self, workspace: Path, client: Any, on_event: Optional[Callable[[Dict[str, Any]], None]] = None):
@@ -173,8 +179,11 @@ class SubagentManager:
         subagent.start()
         return subagent
 
-    def list_all(self) -> List[Dict[str, Any]]:
-        return [s.to_dict() for s in self.subagents.values()]
+    def get(self, subagent_id: str) -> Optional[Subagent]:
+        return self.subagents.get(subagent_id)
+
+    def list_all(self, include_events: bool = True) -> List[Dict[str, Any]]:
+        return [s.to_dict(include_events=include_events) for s in self.subagents.values()]
 
     def kill(self, subagent_id: str) -> bool:
         if subagent_id in self.subagents:

@@ -92,6 +92,7 @@ class AutonomousAgent:
         if "workspace" in kwargs:
             self.workspace = Path(kwargs["workspace"]).resolve()
             self.tool_executor = ToolExecutor(workspace=self.workspace)
+            self.subagent_manager.workspace = self.workspace
             self._init_system_prompt()
 
     def run_task(self, prompt: str, images: Optional[List[str]] = None):
@@ -192,7 +193,11 @@ class AutonomousAgent:
                         sub = self.subagent_manager.spawn(role=sub_role, prompt=sub_prompt, model=sub_model)
                         res = {
                             "success": True,
-                            "output": f"Subagent '{sub_role}' (ID: {sub.id}) spawned in background. Will report events dynamically."
+                            "output": f"Subagent '{sub_role}' (ID: {sub.id}) spawned in background.",
+                            "subagent_id": sub.id,
+                            "subagent_role": sub_role,
+                            "subagent_prompt": sub_prompt,
+                            "is_subagent": True
                         }
                     else:
                         # Auto-Accept vs Confirmation Check
