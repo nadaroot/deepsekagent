@@ -1,0 +1,2 @@
+# NonRoot Autonomous AI Agent Dependencies
+# Pure standard library - no external runtime dependencies required!

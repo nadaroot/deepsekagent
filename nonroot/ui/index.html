@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NonRoot · Autonomous AI Agent</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- LEFT SIDEBAR -->
+        <aside class="sidebar-left">
+            <div class="sidebar-top">
+                <div class="brand">
+                    <img src="/favicon.png" alt="NonRoot" class="brand-icon" width="22" height="22" style="border-radius: 5px; object-fit: cover;">
+                    <span class="brand-title">NonRoot</span>
+                </div>
+            </div>
+
+
+            <div class="workspace-pill" id="workspace-info" title="Рабочая директория">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span class="workspace-text" id="workspace-path">...</span>
+            </div>
+
+            <div class="sidebar-section-title">СУБАГЕНТЫ</div>
+            <div class="subagents-list" id="subagents-list">
+                <div class="empty-subagents">Нет активных субагентов</div>
+            </div>
+
+            <div class="sidebar-footer">
+                <button class="btn-sidebar" id="btn-open-settings">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <span>Настройки</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- CENTER MAIN CHAT CANVAS -->
+        <main class="main-canvas">
+            <!-- TOP BAR -->
+            <header class="top-nav">
+                <div class="nav-left">
+                    <div class="model-select-wrapper">
+                        <select id="model-select" class="model-dropdown">
+                            <optgroup label="Официальные DeepSeek">
+                                <option value="deepseek-chat">deepseek-chat (V3)</option>
+                                <option value="deepseek-reasoner">deepseek-reasoner (R1 Thinking)</option>
+                                <option value="deepseek-coder">deepseek-coder (33B)</option>
+                            </optgroup>
+                            <optgroup label="Роутеры / Провайдеры">
+                                <option value="deepseek-ai/DeepSeek-V3">deepseek-ai/DeepSeek-V3</option>
+                                <option value="deepseek-ai/DeepSeek-R1">deepseek-ai/DeepSeek-R1</option>
+                            </optgroup>
+                            <optgroup label="Алиасы">
+                                <option value="deepseek-v3">deepseek-v3</option>
+                                <option value="deepseek-r1">deepseek-r1</option>
+                            </optgroup>
+                            <optgroup label="Кодеры & Математика">
+                                <option value="deepseek-coder-33b-instruct">deepseek-coder-33b-instruct</option>
+                                <option value="deepseek-coder-6.7b-instruct">deepseek-coder-6.7b-instruct</option>
+                                <option value="deepseek-math-7b-instruct">deepseek-math-7b-instruct</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="status-badge hidden" id="agent-status-badge">
+                        <span class="status-dot"></span>
+                        <span class="status-text" id="agent-status-text"></span>
+                    </div>
+
+                </div>
+
+                <div class="nav-right">
+                    <button class="btn-icon" id="btn-toggle-right-sidebar" title="История чатов">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- CHAT MESSAGES AREA -->
+            <div class="chat-container" id="chat-container">
+                <!-- Welcome Screen -->
+                <div class="welcome-screen" id="welcome-screen">
+                    <div class="welcome-badge">NONROOT AGENT</div>
+                    <h1 class="welcome-title">Автономный ИИ-агент</h1>
+                    <p class="welcome-desc">Выполнение задач в терминале, работа с файловой системой, поиск по коду и запуск субагентов на базе DeepSeek.</p>
+                    
+                    <div class="prompt-cards">
+                        <div class="prompt-card" onclick="setPrompt('Исследуй текущую кодовую базу, опиши архитектуру и найди потенциальные баги')">
+                            <div class="prompt-card-title">Аудит кодовой базы</div>
+                            <div class="prompt-card-sub">Анализ файлов и зависимостей</div>
+                        </div>
+                        <div class="prompt-card" onclick="setPrompt('Запусти субагента для исследования документации и напиши тесты')">
+                            <div class="prompt-card-title">Субагенты</div>
+                            <div class="prompt-card-sub">Параллельное решение подзадач</div>
+                        </div>
+                        <div class="prompt-card" onclick="setPrompt('Создай REST API сервер на Python и протестируй эндпоинты')">
+                            <div class="prompt-card-title">Автономный кодинг</div>
+                            <div class="prompt-card-sub">Написание кода и верификация</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Message Feed -->
+                <div class="messages-feed" id="messages-feed"></div>
+            </div>
+
+            <!-- BOTTOM INPUT -->
+            <footer class="input-panel">
+                <div class="image-preview-strip" id="image-preview-strip"></div>
+                
+                <div class="input-box">
+                    <button class="btn-attach" id="btn-attach-image" title="Прикрепить изображение">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                    </button>
+                    <input type="file" id="file-input" accept="image/*" multiple style="display: none;">
+
+                    <textarea id="prompt-input" placeholder="Поставьте задачу..." rows="1"></textarea>
+
+                    <div class="input-actions">
+                        <button class="btn-stop hidden" id="btn-stop-agent" title="Остановить">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                            <span>Стоп</span>
+                        </button>
+                        <button class="btn-send" id="btn-send-prompt" title="Отправить">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </footer>
+        </main>
+
+        <!-- RIGHT SIDEBAR (CHATS & SESSIONS) -->
+        <aside class="sidebar-right" id="sidebar-right">
+            <div class="sidebar-right-header">
+                <span class="sidebar-section-title">ИСТОРИЯ ЧАТОВ</span>
+                <button class="btn-new-chat-small" id="btn-new-chat" title="Новый чат">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                    <span>Новый чат</span>
+                </button>
+            </div>
+
+            <div class="sessions-list" id="sessions-list">
+                <!-- Dynamically filled sessions -->
+            </div>
+        </aside>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div class="modal-overlay hidden" id="settings-modal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h2 class="modal-title">Настройки NonRoot</h2>
+                <button class="btn-icon" id="btn-close-settings">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">DeepSeek API Base URL</label>
+                    <input type="text" id="setting-api-url" class="form-input" placeholder="http://127.0.0.1:3000/v1 или https://api.deepseek.com/v1">
+                    <div class="form-hint">Эндпоинт DeepSeek API (совместим с OpenAI v1)</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <input type="password" id="setting-api-key" class="form-input" placeholder="sk-...">
+                    <div class="form-hint">Ключ авторизации (по умолчанию sk-nonroot-free)</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Рабочая директория (Workspace)</label>
+                    <input type="text" id="setting-workspace" class="form-input" placeholder="/path/to/project">
+                    <div class="form-hint">Папка, в которой агент выполняет команды и создает файлы</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Лимит шагов цикла</label>
+                    <input type="number" id="setting-max-steps" class="form-input" value="30" min="5" max="100">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Системные инструкции</label>
+                    <textarea id="setting-system-prompt" class="form-textarea" rows="3" placeholder="Специальные правила кодинга..."></textarea>
+                </div>
+
+                <div class="form-toggle-row">
+                    <div>
+                        <div class="toggle-title">Автоматическое выполнение инструментов (Auto-Accept)</div>
+                        <div class="form-hint">Выполнять shell-команды и запись файлов без ручного подтверждения</div>
+                    </div>
+                    <input type="checkbox" id="setting-auto-accept" class="toggle-switch">
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-cancel-settings">Отмена</button>
+                <button class="btn btn-primary" id="btn-save-settings">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
