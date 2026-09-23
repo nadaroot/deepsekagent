@@ -1,0 +1,147 @@
+name: Build and Release NonRoot Standalone Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v1.0.0)'
+        required: false
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os_label }})
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONIOENCODING: "utf-8"
+      PYTHONUTF8: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            os_label: Windows (x64)
+            platform: windows
+          - os: macos-latest
+            os_label: macOS (arm64)
+            platform: macos-arm64
+          - os: ubuntu-22.04
+            os_label: Linux (x64)
+            platform: linux-x64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Build NonRoot Standalone Binary
+        run: |
+          python build_standalone.py
+
+      - name: Package Windows Artifacts
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts
+          Copy-Item dist\NonRoot.exe artifacts\NonRoot.exe
+          Copy-Item dist\NonRoot.exe artifacts\NonRoot-Windows-x64.exe
+          Get-ChildItem artifacts
+
+      - name: Package macOS Artifacts
+        if: matrix.platform == 'macos-arm64'
+        run: |
+          mkdir -p artifacts
+          chmod +x dist/NonRoot
+          cd dist
+          zip -9 ../artifacts/NonRoot-macos-arm64.zip NonRoot
+          cd ..
+          ls -la artifacts/
+
+      - name: Package Linux Artifacts
+        if: matrix.platform == 'linux-x64'
+        run: |
+          mkdir -p artifacts
+          chmod +x dist/NonRoot
+          tar -czvf artifacts/NonRoot-linux-x64.tar.gz -C dist NonRoot
+          ls -la artifacts/
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.platform }}
+          path: artifacts/*
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_download
+
+      - name: Flatten and list release assets
+        run: |
+          mkdir -p release_assets
+          find release_download -type f -exec cp {} release_assets/ \;
+          ls -la release_assets/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          name: NonRoot Release ${{ github.event.inputs.tag_name || github.ref_name }}
+          body: |
+            ### NonRoot — Autonomous AI Agent (OpenCode 1:1)
+
+            NonRoot — полностью автономный локальный ИИ-агент разработки на базе DeepSeek API (V3 & R1) с веб-интерфейсом в стиле OpenCode, инструментами выполнения команд, редактирования файлов и поддержкой параллельных субагентов.
+
+            ---
+
+            ### Загрузка сборок (Downloads):
+
+            #### Windows:
+            - [`NonRoot.exe`](https://github.com/nadaroot/nonroot/releases/download/${{ github.event.inputs.tag_name || github.ref_name }}/NonRoot.exe) — Запуск в 1 клик
+
+            #### macOS:
+            - [`NonRoot-macos-arm64.zip`](https://github.com/nadaroot/nonroot/releases/download/${{ github.event.inputs.tag_name || github.ref_name }}/NonRoot-macos-arm64.zip) — Apple Silicon (M1/M2/M3/M4)
+
+            #### Linux:
+            - [`NonRoot-linux-x64.tar.gz`](https://github.com/nadaroot/nonroot/releases/download/${{ github.event.inputs.tag_name || github.ref_name }}/NonRoot-linux-x64.tar.gz) — x86_64
+
+            ---
+
+            ### Возможности:
+            - **OpenCode 1:1 UI**: Глубокая темная тема, карточки выполнения инструментов, стриминг рассуждений `<think>`.
+            - **Автономный ReAct цикл**: Выполнение shell-команд, чтение, запись и точечное редактирование файлов, поиск по коду, чтение веб-страниц.
+            - **Параллельные субагенты**: Запуск и координация независимых подзадач.
+            - **Мультимодальность и фото**: Загрузка скриншотов и фото в диалог.
+            - **Режим Auto-Accept**: Переключатель автоматического подтверждения действий.
+            - **Ярлыки и интеграция**: Команда `nonroot` в терминале и ярлык рабочего стола.
+          files: release_assets/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
