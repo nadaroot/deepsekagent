@@ -255,8 +255,18 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
 
         self.send_error(404, "Not Found")
 
-def start_server(port: int = 8765, host: str = "127.0.0.1") -> HTTPServer:
-    server = ThreadedHTTPServer((host, port), NonRootHTTPHandler)
+def start_server(port: int = 8765, host: str = "127.0.0.1"):
+    server = None
+    actual_port = port
+    for offset in range(20):
+        try:
+            actual_port = port + offset
+            server = ThreadedHTTPServer((host, actual_port), NonRootHTTPHandler)
+            break
+        except OSError as e:
+            if offset == 19:
+                raise e
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
-    return server
+    return server, actual_port
+

@@ -19,11 +19,24 @@ def launch_app_in_browser(url: str):
     launched = False
 
     if system == "darwin":
-        # Check Chrome app mode
-        chrome_app = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        if os.path.exists(chrome_app):
+        chrome_candidates = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+        ]
+        for c in chrome_candidates:
+            if os.path.exists(c):
+                try:
+                    subprocess.Popen([c, f"--app={url}", "--no-first-run"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    launched = True
+                    break
+                except Exception:
+                    pass
+        if not launched:
             try:
-                subprocess.Popen([chrome_app, f"--app={url}", "--no-first-run"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 launched = True
             except Exception:
                 pass
@@ -51,7 +64,10 @@ def launch_app_in_browser(url: str):
                     pass
 
     if not launched:
-        webbrowser.open(url)
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
 
 def main():
     parser = argparse.ArgumentParser(
@@ -88,6 +104,9 @@ def main():
     port = args.port or config_manager.get("port", 8765)
     host = args.host
 
+    server, actual_port = start_server(port=port, host=host)
+    url = f"http://{host}:{actual_port}"
+
     print(r'''
   _  _           ___            _   
  | \| |___ _ _  | _ \___  ___ _| |_ 
@@ -97,13 +116,10 @@ def main():
     ''')
     print(f"[*] Workspace: {config_manager.get('workspace')}")
     print(f"[*] Model: {config_manager.get('model')}")
-    print(f"[*] Server starting at: http://{host}:{port}")
-
-    server = start_server(port=port, host=host)
-    url = f"http://{host}:{port}"
+    print(f"[*] Server running at: {url}")
 
     if not args.no_browser:
-        time.sleep(0.4)
+        time.sleep(0.3)
         launch_app_in_browser(url)
 
     print("[+] NonRoot is active. Press Ctrl+C to stop.\n")
@@ -116,3 +132,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
