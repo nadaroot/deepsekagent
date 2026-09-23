@@ -1163,17 +1163,180 @@ btnStop.addEventListener('click', () => {
 // SETTINGS MODAL
 // ============================================================================
 
+let currentProviders = [];
+
+// Provider Template Presets
+const PROVIDER_PRESETS = {
+    openai: {
+        name: 'OpenAI',
+        url: 'https://api.openai.com/v1',
+        models: 'gpt-4o, gpt-4o-mini, o3-mini, o1'
+    },
+    openrouter: {
+        name: 'OpenRouter',
+        url: 'https://openrouter.ai/api/v1',
+        models: 'anthropic/claude-3.5-sonnet, deepseek/deepseek-r1, meta-llama/llama-3.3-70b-instruct'
+    },
+    deepseek_official: {
+        name: 'DeepSeek (Официальный)',
+        url: 'https://api.deepseek.com/v1',
+        models: 'deepseek-chat, deepseek-reasoner'
+    },
+    groq: {
+        name: 'Groq',
+        url: 'https://api.groq.com/openai/v1',
+        models: 'llama-3.3-70b-versatile, deepseek-r1-distill-llama-70b'
+    },
+    ollama: {
+        name: 'Ollama (Локальный)',
+        url: 'http://localhost:11434/v1',
+        models: 'llama3, deepseek-r1, qwen2.5-coder'
+    }
+};
+
+// DOM Elements for Providers & Updates
+const providersListEl = document.getElementById('providers-list');
+const provTemplate = document.getElementById('prov-template');
+const provName = document.getElementById('prov-name');
+const provUrl = document.getElementById('prov-url');
+const provKey = document.getElementById('prov-key');
+const provModels = document.getElementById('prov-models');
+const btnSaveProviderItem = document.getElementById('btn-save-provider-item');
+
+const updateBanner = document.getElementById('update-banner');
+const updateVersionLabel = document.getElementById('update-version-label');
+const updateMsgLabel = document.getElementById('update-msg-label');
+const btnDismissUpdate = document.getElementById('btn-dismiss-update');
+const btnApplyUpdate = document.getElementById('btn-apply-update');
+const updateCurrentCommit = document.getElementById('update-current-commit');
+const updateCheckStatus = document.getElementById('update-check-status');
+const btnCheckUpdateManual = document.getElementById('btn-check-update-manual');
+const btnApplyUpdateModal = document.getElementById('btn-apply-update-modal');
+
+// Settings Tabs
+document.querySelectorAll('.settings-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.settings-tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.settings-tab-pane').forEach(p => p.style.display = 'none');
+        btn.classList.add('active');
+        const targetPane = document.getElementById(btn.dataset.tab);
+        if (targetPane) targetPane.style.display = 'block';
+    });
+});
+
+if (provTemplate) {
+    provTemplate.addEventListener('change', () => {
+        const val = provTemplate.value;
+        if (PROVIDER_PRESETS[val]) {
+            const p = PROVIDER_PRESETS[val];
+            provName.value = p.name;
+            provUrl.value = p.url;
+            provModels.value = p.models;
+        }
+    });
+}
+
+function renderProvidersList() {
+    if (!providersListEl) return;
+    if (!currentProviders || currentProviders.length === 0) {
+        providersListEl.innerHTML = '<div class="empty-hint">Провайдеры еще не добавлены. Заполните форму ниже для добавления.</div>';
+        return;
+    }
+
+    providersListEl.innerHTML = currentProviders.map((p, idx) => {
+        const hasKey = p.api_key && p.api_key.trim().length > 0;
+        const keyDisplay = hasKey ? 'Ключ задан (••••' + p.api_key.slice(-4) + ')' : 'Ключ не указан';
+        const modelsList = (p.models || []).join(', ') || 'Все';
+        return `
+            <div class="provider-item">
+                <div class="provider-item-info">
+                    <div class="provider-item-title">${escapeHtml(p.name || 'Без названия')}</div>
+                    <div class="provider-item-meta font-mono">${escapeHtml(p.base_url || '')}</div>
+                    <div class="provider-item-models">${escapeHtml(modelsList)}</div>
+                    <div class="provider-item-key ${hasKey ? 'has-key' : ''}">${keyDisplay}</div>
+                </div>
+                <div class="provider-item-actions">
+                    <button type="button" class="btn-icon-subtle" onclick="editProvider(${idx})" title="Редактировать">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    </button>
+                    <button type="button" class="btn-icon-subtle danger" onclick="deleteProvider(${idx})" title="Удалить">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+window.deleteProvider = function(idx) {
+    if (idx >= 0 && idx < currentProviders.length) {
+        currentProviders.splice(idx, 1);
+        renderProvidersList();
+    }
+};
+
+window.editProvider = function(idx) {
+    if (idx >= 0 && idx < currentProviders.length) {
+        const p = currentProviders[idx];
+        provName.value = p.name || '';
+        provUrl.value = p.base_url || '';
+        provKey.value = p.api_key || '';
+        provModels.value = (p.models || []).join(', ');
+        provName.focus();
+    }
+};
+
+if (btnSaveProviderItem) {
+    btnSaveProviderItem.addEventListener('click', () => {
+        const name = (provName.value || '').trim();
+        const url = (provUrl.value || '').trim();
+        const key = (provKey.value || '').trim();
+        const modelsStr = (provModels.value || '').trim();
+
+        if (!name || !url) {
+            alert('Укажите название и API Base URL провайдера');
+            return;
+        }
+
+        const models = modelsStr ? modelsStr.split(',').map(m => m.trim()).filter(Boolean) : [];
+        const existingIdx = currentProviders.findIndex(p => p.name.toLowerCase() === name.toLowerCase());
+
+        const newProv = {
+            id: 'prov_' + Date.now(),
+            name: name,
+            base_url: url,
+            api_key: key,
+            models: models
+        };
+
+        if (existingIdx >= 0) {
+            currentProviders[existingIdx] = newProv;
+        } else {
+            currentProviders.push(newProv);
+        }
+
+        provName.value = '';
+        provUrl.value = '';
+        provKey.value = '';
+        provModels.value = '';
+        renderProvidersList();
+    });
+}
+
 btnOpenSettings.addEventListener('click', () => {
     fetch('/api/settings')
         .then(r => r.json())
         .then(cfg => {
-            settingApiUrl.value = cfg.api_base_url || '';
-            settingApiKey.value = cfg.api_key || '';
+            currentProviders = Array.isArray(cfg.custom_providers) ? cfg.custom_providers : [];
+            renderProvidersList();
+
             settingWorkspace.value = cfg.workspace || '';
             settingMaxSteps.value = cfg.max_steps || 30;
             settingSystemPrompt.value = cfg.system_prompt || '';
             settingAutoAccept.checked = !!cfg.auto_accept_tools;
             settingsModal.classList.remove('hidden');
+
+            checkForUpdates(true);
         })
         .catch(err => {
             console.error('Failed to load settings:', err);
@@ -1209,8 +1372,7 @@ window.addEventListener('keydown', (e) => {
 
 btnSaveSettings.addEventListener('click', () => {
     const updates = {
-        api_base_url: settingApiUrl.value.trim(),
-        api_key: settingApiKey.value.trim(),
+        custom_providers: currentProviders,
         workspace: settingWorkspace.value.trim(),
         max_steps: parseInt(settingMaxSteps.value, 10) || 30,
         system_prompt: settingSystemPrompt.value.trim(),
@@ -1225,10 +1387,112 @@ btnSaveSettings.addEventListener('click', () => {
         if (updates.workspace) {
             updateWorkspaceDisplay(updates.workspace);
         }
+        loadModelsList();
     }).catch(err => {
         alert('Ошибка при сохранении настроек: ' + err);
     });
 });
+
+// ============================================================================
+// AUTO-UPDATE FROM GIT
+// ============================================================================
+
+function checkForUpdates(silent = false) {
+    if (updateCheckStatus) updateCheckStatus.textContent = 'Проверка обновлений...';
+
+    fetch('/api/update/check')
+        .then(r => r.json())
+        .then(res => {
+            if (updateCurrentCommit && res.current_commit) {
+                updateCurrentCommit.textContent = res.current_commit;
+            }
+
+            if (res.has_update) {
+                if (updateBanner) {
+                    if (updateVersionLabel) updateVersionLabel.textContent = res.latest_commit || 'новая версия';
+                    if (updateMsgLabel) updateMsgLabel.textContent = res.message || 'Новые коммиты в git';
+                    updateBanner.classList.remove('hidden');
+                }
+
+                if (updateCheckStatus) {
+                    updateCheckStatus.textContent = `Доступно обновление (${res.latest_commit}): ${res.message || ''}`;
+                }
+                if (btnApplyUpdateModal) {
+                    btnApplyUpdateModal.classList.remove('hidden');
+                }
+            } else {
+                if (!silent && updateCheckStatus) {
+                    if (res.error) {
+                        updateCheckStatus.textContent = `Ошибка: ${res.error}`;
+                    } else {
+                        updateCheckStatus.textContent = `У вас последняя версия (${res.current_commit || ''})`;
+                    }
+                }
+                if (btnApplyUpdateModal) {
+                    btnApplyUpdateModal.classList.add('hidden');
+                }
+            }
+        })
+        .catch(err => {
+            if (!silent && updateCheckStatus) {
+                updateCheckStatus.textContent = 'Не удалось проверить обновления: ' + err;
+            }
+        });
+}
+
+function applyUpdate(btnEl) {
+    const originalText = btnEl ? btnEl.textContent : '';
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = 'Обновление... (git pull)';
+    }
+
+    fetch('/api/update/apply', { method: 'POST' })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                alert(`Обновление успешно установлено (${res.commit})! Страница будет перезагружена.`);
+                location.reload();
+            } else {
+                alert('Ошибка при обновлении: ' + (res.error || 'Неизвестная ошибка'));
+                if (btnEl) {
+                    btnEl.disabled = false;
+                    btnEl.textContent = originalText;
+                }
+            }
+        })
+        .catch(err => {
+            alert('Ошибка сети при обновлении: ' + err);
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.textContent = originalText;
+            }
+        });
+}
+
+if (btnDismissUpdate) {
+    btnDismissUpdate.addEventListener('click', () => {
+        if (updateBanner) updateBanner.classList.add('hidden');
+    });
+}
+
+if (btnApplyUpdate) {
+    btnApplyUpdate.addEventListener('click', function() {
+        applyUpdate(this);
+    });
+}
+
+if (btnCheckUpdateManual) {
+    btnCheckUpdateManual.addEventListener('click', () => {
+        checkForUpdates(false);
+    });
+}
+
+if (btnApplyUpdateModal) {
+    btnApplyUpdateModal.addEventListener('click', function() {
+        applyUpdate(this);
+    });
+}
 
 // Load Models dynamically from API
 function loadModelsList() {
@@ -1263,5 +1527,6 @@ window.addEventListener('DOMContentLoaded', () => {
     initSessions();
     connectSSE();
     loadModelsList();
+    setTimeout(() => checkForUpdates(true), 2000);
 });
 

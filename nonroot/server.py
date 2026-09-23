@@ -127,6 +127,7 @@ active_agent = AutonomousAgent(
     auto_accept=config_manager.get("auto_accept_tools"),
     max_steps=config_manager.get("max_steps"),
     system_prompt=config_manager.get("system_prompt", ""),
+    custom_providers=config_manager.get("custom_providers", []),
     on_event=broadcaster.broadcast
 )
 
@@ -225,6 +226,14 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
         # 2. API Endpoints
         if path == "/api/settings":
             self._send_json(config_manager.config)
+            return
+
+        if path == "/api/update/check":
+            try:
+                from nonroot.updater import check_for_updates
+                self._send_json(check_for_updates())
+            except Exception as e:
+                self._send_json({"has_update": False, "error": str(e)})
             return
 
         if path == "/api/models":
@@ -364,9 +373,19 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
                 model=config_manager.get("model"),
                 auto_accept=config_manager.get("auto_accept_tools"),
                 max_steps=config_manager.get("max_steps"),
-                workspace=config_manager.get("workspace")
+                workspace=config_manager.get("workspace"),
+                custom_providers=config_manager.get("custom_providers", [])
             )
             self._send_json({"success": True, "config": config_manager.config})
+            return
+
+        if path == "/api/update/apply":
+            try:
+                from nonroot.updater import apply_update
+                res = apply_update()
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)})
             return
 
         self.send_error(404, "Not Found")

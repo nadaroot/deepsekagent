@@ -9,6 +9,30 @@ import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 
+DEFAULT_PROVIDERS = [
+    {
+        "id": "deepseek_official",
+        "name": "DeepSeek (Официальный)",
+        "base_url": "https://api.deepseek.com/v1",
+        "api_key": "",
+        "models": ["deepseek-chat", "deepseek-reasoner"]
+    },
+    {
+        "id": "openai",
+        "name": "OpenAI",
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "",
+        "models": ["gpt-4o", "gpt-4o-mini", "o3-mini", "o1"]
+    },
+    {
+        "id": "openrouter",
+        "name": "OpenRouter",
+        "base_url": "https://openrouter.ai/api/v1",
+        "api_key": "",
+        "models": ["anthropic/claude-3.5-sonnet", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct"]
+    }
+]
+
 DEFAULT_CONFIG = {
     "api_base_url": "http://127.0.0.1:9655/v1",
     "api_key": "sk-nonroot-free",
@@ -19,7 +43,8 @@ DEFAULT_CONFIG = {
     "temperature": 0.2,
     "theme": "dark",
     "port": 8765,
-    "system_prompt": ""
+    "system_prompt": "",
+    "custom_providers": DEFAULT_PROVIDERS
 }
 
 def get_config_dir() -> Path:
@@ -55,6 +80,8 @@ class ConfigManager:
                     cfg.update(loaded)
             except Exception:
                 pass
+        if "custom_providers" not in cfg or not isinstance(cfg["custom_providers"], list):
+            cfg["custom_providers"] = DEFAULT_PROVIDERS
         return cfg
 
     def save(self):

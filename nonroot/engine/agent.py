@@ -26,6 +26,7 @@ class AutonomousAgent:
         auto_accept: bool = True,
         max_steps: int = 30,
         system_prompt: str = "",
+        custom_providers: Optional[List[Dict[str, Any]]] = None,
         on_event: Optional[Callable[[Dict[str, Any]], None]] = None
     ):
         self.workspace = Path(workspace).resolve()
@@ -35,9 +36,10 @@ class AutonomousAgent:
         self.auto_accept = auto_accept
         self.max_steps = max_steps
         self.custom_system_prompt = system_prompt
+        self.custom_providers = custom_providers or []
         self.on_event = on_event
 
-        self.client = DeepSeekClient(api_base_url=self.api_base_url, api_key=self.api_key)
+        self.client = DeepSeekClient(api_base_url=self.api_base_url, api_key=self.api_key, custom_providers=self.custom_providers)
         self.tool_executor = ToolExecutor(workspace=self.workspace)
         self.subagent_manager = SubagentManager(
             workspace=self.workspace,
@@ -79,10 +81,13 @@ class AutonomousAgent:
         self._tool_confirm_event.set()
 
     def update_settings(self, **kwargs):
+        if "custom_providers" in kwargs:
+            self.custom_providers = kwargs["custom_providers"]
+            self.client.set_providers(self.custom_providers)
         if "api_base_url" in kwargs or "api_key" in kwargs:
             self.api_base_url = kwargs.get("api_base_url", self.api_base_url)
             self.api_key = kwargs.get("api_key", self.api_key)
-            self.client = DeepSeekClient(api_base_url=self.api_base_url, api_key=self.api_key)
+            self.client = DeepSeekClient(api_base_url=self.api_base_url, api_key=self.api_key, custom_providers=self.custom_providers)
         if "model" in kwargs:
             self.model = kwargs["model"]
         if "auto_accept" in kwargs:

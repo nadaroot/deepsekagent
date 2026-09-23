@@ -59,6 +59,18 @@
 
         <!-- MAIN CHAT CANVAS -->
         <main class="main-canvas">
+            <!-- UPDATE BANNER -->
+            <div class="update-banner hidden" id="update-banner">
+                <div class="update-banner-content">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                    <span class="update-banner-text">Доступно обновление NonRoot (<span id="update-version-label">...</span>): <span id="update-msg-label">...</span></span>
+                </div>
+                <div class="update-banner-actions">
+                    <button class="btn btn-secondary btn-sm" id="btn-dismiss-update">Позже</button>
+                    <button class="btn btn-primary btn-sm" id="btn-apply-update">Обновить сейчас</button>
+                </div>
+            </div>
+
             <!-- TOP BAR: ONLY MODEL SELECTION -->
             <header class="top-nav">
                 <div class="nav-left"></div>
@@ -70,15 +82,6 @@
                                 <option value="deepseek-reasoner">deepseek-reasoner (R1 Thinking)</option>
                                 <option value="deepseek-coder">deepseek-coder (33B)</option>
                             </optgroup>
-                            <optgroup label="Роутеры / Провайдеры">
-                                <option value="deepseek-ai/DeepSeek-V3">deepseek-ai/DeepSeek-V3</option>
-                                <option value="deepseek-ai/DeepSeek-R1">deepseek-ai/DeepSeek-R1</option>
-                            </optgroup>
-                            <optgroup label="Кодеры & Математика">
-                                <option value="deepseek-coder-33b-instruct">deepseek-coder-33b-instruct</option>
-                                <option value="deepseek-coder-6.7b-instruct">deepseek-coder-6.7b-instruct</option>
-                                <option value="deepseek-math-7b-instruct">deepseek-math-7b-instruct</option>
-                            </optgroup>
                         </select>
                     </div>
                 </div>
@@ -88,9 +91,8 @@
             <div class="chat-container" id="chat-container">
                 <!-- Welcome Screen -->
                 <div class="welcome-screen" id="welcome-screen">
-                    <div class="welcome-badge">NONROOT AGENT</div>
-                    <h1 class="welcome-title">Автономный ИИ-агент</h1>
-                    <p class="welcome-desc">Выполнение задач в терминале, работа с файловой системой, поиск по коду и запуск субагентов на базе DeepSeek.</p>
+                    <h1 class="welcome-title">NonRoot</h1>
+                    <p class="welcome-desc">Автономная среда выполнения задач в терминале и кодовой базе.</p>
                     
                     <!-- Scope Selector for New Chat -->
                     <div class="scope-picker-section">
@@ -229,49 +231,119 @@
 
     <!-- SETTINGS MODAL -->
     <div class="modal-overlay hidden" id="settings-modal">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-large">
             <div class="modal-header">
-                <h2 class="modal-title">Настройки NonRoot</h2>
+                <h2 class="modal-title">Настройки</h2>
                 <button class="btn-icon" id="btn-close-settings">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
             </div>
 
+            <!-- Settings Tabs Header -->
+            <div class="settings-tabs-header">
+                <button type="button" class="settings-tab-btn active" data-tab="pane-providers">Провайдеры и API-ключи</button>
+                <button type="button" class="settings-tab-btn" data-tab="pane-general">Параметры агента</button>
+                <button type="button" class="settings-tab-btn" data-tab="pane-updates">Обновления</button>
+            </div>
+
             <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">DeepSeek API Base URL</label>
-                    <input type="text" id="setting-api-url" class="form-input" placeholder="http://127.0.0.1:3000/v1 или https://api.deepseek.com/v1">
-                    <div class="form-hint">Эндпоинт DeepSeek API (совместим с OpenAI v1)</div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">API Key</label>
-                    <input type="password" id="setting-api-key" class="form-input" placeholder="sk-...">
-                    <div class="form-hint">Ключ авторизации (по умолчанию sk-nonroot-free)</div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Рабочая директория по умолчанию</label>
-                    <input type="text" id="setting-workspace" class="form-input" placeholder="/">
-                    <div class="form-hint">Папка, в которой агент выполняет команды и создает файлы</div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Лимит шагов цикла</label>
-                    <input type="number" id="setting-max-steps" class="form-input" value="30" min="5" max="100">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Системные инструкции</label>
-                    <textarea id="setting-system-prompt" class="form-textarea" rows="3" placeholder="Специальные правила кодинга..."></textarea>
-                </div>
-
-                <div class="form-toggle-row">
-                    <div>
-                        <div class="toggle-title">Автоматическое выполнение инструментов (Auto-Accept)</div>
-                        <div class="form-hint">Выполнять shell-команды и запись файлов без ручного подтверждения</div>
+                <!-- TAB 1: PROVIDERS & EXTRA API KEYS -->
+                <div class="settings-tab-pane active" id="pane-providers">
+                    <div class="pane-hint">Настройте ключи для подключения любых нейросетей (OpenAI, OpenRouter, DeepSeek, Groq, Ollama). Модели появятся в верхнем меню.</div>
+                    
+                    <div class="providers-list" id="providers-list">
+                        <!-- Filled by JS -->
                     </div>
-                    <input type="checkbox" id="setting-auto-accept" class="toggle-switch">
+
+                    <div class="card-add-provider">
+                        <div class="card-add-title">Добавить или обновить провайдер</div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1;">
+                                <label class="form-label">Шаблон</label>
+                                <select id="prov-template" class="form-select">
+                                    <option value="custom">Пользовательский</option>
+                                    <option value="deepseek_official">DeepSeek (api.deepseek.com)</option>
+                                    <option value="openai">OpenAI (api.openai.com)</option>
+                                    <option value="openrouter">OpenRouter (openrouter.ai)</option>
+                                    <option value="groq">Groq (api.groq.com)</option>
+                                    <option value="ollama">Ollama (localhost:11434)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex:1;">
+                                <label class="form-label">Название</label>
+                                <input type="text" id="prov-name" class="form-input" placeholder="например: OpenAI">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">API Base URL</label>
+                            <input type="text" id="prov-url" class="form-input" placeholder="https://api.openai.com/v1">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">API Key</label>
+                            <input type="password" id="prov-key" class="form-input" placeholder="sk-...">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Модели (через запятую)</label>
+                            <input type="text" id="prov-models" class="form-input" placeholder="gpt-4o, gpt-4o-mini, o3-mini">
+                        </div>
+
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-save-provider-item">
+                            <span>Сохранить провайдер в список</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TAB 2: GENERAL SETTINGS -->
+                <div class="settings-tab-pane" id="pane-general" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Рабочая директория по умолчанию</label>
+                        <input type="text" id="setting-workspace" class="form-input" placeholder="/">
+                        <div class="form-hint">Папка, в которой агент выполняет команды и создает файлы</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Лимит шагов цикла</label>
+                        <input type="number" id="setting-max-steps" class="form-input" value="30" min="5" max="100">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Системные инструкции</label>
+                        <textarea id="setting-system-prompt" class="form-textarea" rows="3" placeholder="Специальные правила кодинга..."></textarea>
+                    </div>
+
+                    <div class="form-toggle-row">
+                        <div>
+                            <div class="toggle-title">Автоматическое выполнение инструментов (Auto-Accept)</div>
+                            <div class="form-hint">Выполнять shell-команды и запись файлов без ручного подтверждения</div>
+                        </div>
+                        <input type="checkbox" id="setting-auto-accept" class="toggle-switch">
+                    </div>
+                </div>
+
+                <!-- TAB 3: UPDATES -->
+                <div class="settings-tab-pane" id="pane-updates" style="display: none;">
+                    <div class="card-update-status">
+                        <div class="update-info-row">
+                            <span class="update-info-label">Текущая версия (коммит):</span>
+                            <span class="update-info-val" id="update-current-commit">...</span>
+                        </div>
+                        <div class="update-info-row">
+                            <span class="update-info-label">Статус:</span>
+                            <span class="update-info-val" id="update-check-status">Готово к проверке</span>
+                        </div>
+                        <div class="update-buttons-row">
+                            <button type="button" class="btn btn-secondary" id="btn-check-update-manual">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                <span>Проверить обновления</span>
+                            </button>
+                            <button type="button" class="btn btn-primary hidden" id="btn-apply-update-modal">
+                                <span>Обновить сейчас (git pull)</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

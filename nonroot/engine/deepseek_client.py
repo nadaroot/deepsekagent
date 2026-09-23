@@ -87,9 +87,24 @@ def auto_start_deepseek_proxy(target_port: int = 9655) -> bool:
     return False
 
 class DeepSeekClient:
-    def __init__(self, api_base_url: str = "http://127.0.0.1:9655/v1", api_key: str = "sk-nonroot-free"):
+    def __init__(self, api_base_url: str = "http://127.0.0.1:9655/v1", api_key: str = "sk-nonroot-free", custom_providers: Optional[List[Dict[str, Any]]] = None):
         self.api_base_url = api_base_url.rstrip("/")
         self.api_key = api_key or "sk-nonroot-free"
+        self.custom_providers = custom_providers or []
+
+    def set_providers(self, providers: List[Dict[str, Any]]):
+        self.custom_providers = providers or []
+
+    def get_endpoint_for_model(self, model: str) -> tuple:
+        """Resolves target base_url and api_key for a given model name."""
+        if self.custom_providers:
+            for p in self.custom_providers:
+                p_models = p.get("models", [])
+                p_url = p.get("base_url", "").rstrip("/")
+                p_key = p.get("api_key", "").strip()
+                if model in p_models and p_url:
+                    return p_url, (p_key or self.api_key)
+        return self.api_base_url, self.api_key
 
     def _ensure_endpoint_ready(self):
         if "127.0.0.1" in self.api_base_url or "localhost" in self.api_base_url:
@@ -108,17 +123,34 @@ class DeepSeekClient:
     def list_models(self) -> List[Dict[str, Any]]:
         self._ensure_endpoint_ready()
         models = list(DEEPSEEK_MODELS)
+        existing_ids = {m["id"] for m in models}
+
+        # Add models configured in custom providers (OpenAI, OpenRouter, Groq, Ollama, etc.)
+        if self.custom_providers:
+            for p in self.custom_providers:
+                p_name = p.get("name", "Провайдер")
+                p_models = p.get("models", [])
+                for m_id in p_models:
+                    if m_id and m_id not in existing_ids:
+                        models.append({
+                            "id": m_id,
+                            "name": m_id,
+                            "desc": f"Модель через {p_name}",
+                            "group": p_name,
+                            "provider_id": p.get("id", "")
+                        })
+                        existing_ids.add(m_id)
+
         try:
             url = f"{self.api_base_url}/models"
             req = urllib.request.Request(url, headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "User-Agent": "NonRoot/1.0"
             })
-            with urllib.request.urlopen(req, timeout=4) as resp:
+            with urllib.request.urlopen(req, timeout=3) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 remote_models = data.get("data", [])
                 if remote_models:
-                    existing_ids = {m["id"] for m in models}
                     for m in remote_models:
                         m_id = m.get("id", "")
                         if m_id and m_id not in existing_ids:
@@ -141,8 +173,10 @@ class DeepSeekClient:
         tools: Optional[List[Dict[str, Any]]] = None,
         images: Optional[List[str]] = None
     ) -> Generator[Dict[str, Any], None, None]:
-        self._ensure_endpoint_ready()
-        url = f"{self.api_base_url}/chat/completions"
+        target_base_url, target_api_key = self.get_endpoint_for_model(model)
+        if target_base_url == self.api_base_url:
+            self._ensure_endpoint_ready()
+        url = f"{target_base_url}/chat/completions"
         
         # Prepare messages payload
         payload_messages = []
@@ -183,7 +217,7 @@ class DeepSeekClient:
         body_bytes = json.dumps(req_body).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {target_api_key}",
             "User-Agent": "NonRoot/1.0"
         }
 
