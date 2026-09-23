@@ -61,12 +61,13 @@ const btnOpenSettings = document.getElementById('btn-open-settings');
 const btnCloseSettings = document.getElementById('btn-close-settings');
 const btnCancelSettings = document.getElementById('btn-cancel-settings');
 const btnSaveSettings = document.getElementById('btn-save-settings');
-const settingApiUrl = document.getElementById('setting-api-url');
-const settingApiKey = document.getElementById('setting-api-key');
 const settingWorkspace = document.getElementById('setting-workspace');
 const settingMaxSteps = document.getElementById('setting-max-steps');
 const settingSystemPrompt = document.getElementById('setting-system-prompt');
 const settingAutoAccept = document.getElementById('setting-auto-accept');
+
+// Monotonic run generation counter to discard stale streaming events after stop or rollback
+let currentRunGeneration = 0;
 
 // ============================================================================
 // CHAT SESSIONS & STORAGE
@@ -76,7 +77,10 @@ function initSessions() {
     try {
         const stored = localStorage.getItem('nonroot_sessions');
         if (stored) {
-            sessions = JSON.parse(stored);
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+                sessions = parsed.filter(s => s && typeof s === 'object' && s.id);
+            }
         }
     } catch (e) {
         console.error('Failed to parse sessions:', e);
@@ -118,8 +122,13 @@ function getActiveSession() {
     return sessions.find(s => s.id === currentSessionId);
 }
 
-// Track which workspace groups are collapsed
-const collapsedGroups = new Set();
+// Track which workspace groups are collapsed, persisted in localStorage
+const COLLAPSED_GROUPS_KEY = 'nonroot_collapsed_groups';
+let collapsedGroups = new Set();
+try {
+    const saved = localStorage.getItem(COLLAPSED_GROUPS_KEY);
+    if (saved) collapsedGroups = new Set(JSON.parse(saved));
+} catch (_) {}
 
 function getWorkspaceGroupName(workspace) {
     if (!workspace || workspace === '/' || workspace === 'whole_machine') return 'Весь ПК';
@@ -202,6 +211,9 @@ window.toggleGroupEncoded = function(encodedWs) {
         } else {
             collapsedGroups.add(workspace);
         }
+        try {
+            localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...collapsedGroups]));
+        } catch (_) {}
         renderSessionsList();
     } catch (e) {
         console.error('toggleGroup error:', e);
@@ -214,6 +226,9 @@ window.toggleGroup = function(groupId, workspace) {
     } else {
         collapsedGroups.add(workspace);
     }
+    try {
+        localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...collapsedGroups]));
+    } catch (_) {}
     renderSessionsList();
 };
 
@@ -279,13 +294,19 @@ window.rollbackToMessage = function(msgIndex) {
     if (!confirm('Откатить диалог до этого действия? Сообщение вернется в поле ввода, а последующие ответы будут удалены.')) {
         return;
     }
-    const session = getActiveSession();
-    if (!session || !session.messages || msgIndex < 0 || msgIndex >= session.messages.length) return;
-
+    currentRunGeneration++;
     if (isRunning) {
         fetch('/api/stop', { method: 'POST' }).catch(() => {});
         setRunningState(false);
     }
+
+    currentAssistantTurn = null;
+    activeAssistantCard = null;
+    activeReasoningBox = null;
+    activeContentEl = null;
+
+    const session = getActiveSession();
+    if (!session || !session.messages || msgIndex < 0 || msgIndex >= session.messages.length) return;
 
     const targetMsg = session.messages[msgIndex];
     if (targetMsg) {
@@ -520,6 +541,7 @@ window.selectWorkspaceScope = function(path) {
 };
 
 function openWorkspaceModal() {
+    hideModelPickerPopover();
     if (inputModalWorkspace) {
         inputModalWorkspace.value = currentWorkspace === '/' ? '' : currentWorkspace;
     }
@@ -534,7 +556,15 @@ function closeWorkspaceModal() {
     if (workspaceModal) workspaceModal.classList.add('hidden');
 }
 
-if (workspacePill) workspacePill.addEventListener('click', openWorkspaceModal);
+if (workspacePill) {
+    workspacePill.addEventListener('click', openWorkspaceModal);
+    workspacePill.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openWorkspaceModal();
+        }
+    });
+}
 if (btnTopWorkspace) btnTopWorkspace.addEventListener('click', openWorkspaceModal);
 if (btnCloseWorkspace) btnCloseWorkspace.addEventListener('click', closeWorkspaceModal);
 if (btnCancelWorkspace) btnCancelWorkspace.addEventListener('click', closeWorkspaceModal);
@@ -575,6 +605,7 @@ function createSubagentChatCard(subId, role, prompt, status) {
 }
 
 window.openSubagentModal = function(subagentId) {
+    hideModelPickerPopover();
     activeModalSubagentId = subagentId;
     const sub = subagentsData[subagentId];
 
@@ -587,7 +618,8 @@ window.openSubagentModal = function(subagentId) {
                     subagentsData[subagentId] = found;
                     renderSubagentModalContent(found);
                 }
-            });
+            })
+            .catch(() => {});
     } else {
         renderSubagentModalContent(sub);
     }
@@ -750,6 +782,9 @@ function updateStatus(status, text) {
 let currentAssistantTurn = null;
 
 function handleAgentEvent(evt) {
+    if (!isRunning && ['reasoning', 'content', 'tool_start', 'tool_end', 'task_completed', 'tool_confirmation_required'].includes(evt.type)) {
+        return;
+    }
     switch (evt.type) {
         case 'init':
             if (evt.workspace) updateWorkspaceDisplay(evt.workspace, false);
@@ -1035,6 +1070,8 @@ window.confirmTool = function(id, approved) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, approved })
+    }).catch(err => {
+        console.error('confirmTool error:', err);
     });
 };
 
@@ -1147,6 +1184,8 @@ window.copyCode = function(button) {
             span.textContent = orig;
             button.classList.remove('copied');
         }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy to clipboard:', err);
     });
 };
 
@@ -1211,6 +1250,7 @@ function submitPrompt() {
     `;
     messagesFeed.appendChild(userCard);
 
+    currentRunGeneration++;
     activeAssistantCard = null;
     currentAssistantTurn = null;
     setRunningState(true);
@@ -1241,7 +1281,10 @@ function submitPrompt() {
 
 // Stop Agent
 btnStop.addEventListener('click', () => {
-    fetch('/api/stop', { method: 'POST' });
+    currentRunGeneration++;
+    currentAssistantTurn = null;
+    setRunningState(false);
+    fetch('/api/stop', { method: 'POST' }).catch(() => {});
 });
 
 // ============================================================================
@@ -1409,6 +1452,7 @@ if (btnSaveProviderItem) {
 }
 
 btnOpenSettings.addEventListener('click', () => {
+    hideModelPickerPopover();
     fetch('/api/settings')
         .then(r => r.json())
         .then(cfg => {
@@ -1440,6 +1484,7 @@ btnOpenSettings.addEventListener('click', () => {
 // Close modals on Escape
 window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+        hideModelPickerPopover();
         if (settingsModal && !settingsModal.classList.contains('hidden')) settingsModal.classList.add('hidden');
         if (workspaceModal && !workspaceModal.classList.contains('hidden')) workspaceModal.classList.add('hidden');
         if (subagentModal && !subagentModal.classList.contains('hidden')) closeSubagentModal();
@@ -1495,7 +1540,8 @@ function checkForUpdates(silent = false) {
             }
 
             if (res.has_update) {
-                if (updateBanner) {
+                const dismissedCommit = sessionStorage.getItem('nonroot_update_dismissed');
+                if (updateBanner && (!silent || dismissedCommit !== res.latest_commit)) {
                     if (updateVersionLabel) updateVersionLabel.textContent = res.latest_commit || 'новая версия';
                     if (updateMsgLabel) updateMsgLabel.textContent = res.message || 'Новые коммиты в git';
                     updateBanner.classList.remove('hidden');
@@ -1528,37 +1574,62 @@ function checkForUpdates(silent = false) {
 }
 
 function applyUpdate(btnEl) {
-    const originalText = btnEl ? btnEl.textContent : '';
-    if (btnEl) {
-        btnEl.disabled = true;
-        btnEl.textContent = 'Обновление... (git pull)';
+    const buttons = [btnApplyUpdate, btnApplyUpdateModal].filter(Boolean);
+    buttons.forEach(b => {
+        b.disabled = true;
+        b.dataset.origText = b.textContent;
+        b.textContent = 'Обновление...';
+    });
+
+    if (updateMsgLabel) {
+        updateMsgLabel.textContent = 'Загрузка и установка обновления...';
     }
 
     fetch('/api/update/apply', { method: 'POST' })
         .then(r => r.json())
         .then(res => {
             if (res.success) {
-                alert(`Обновление успешно установлено (${res.commit})! Страница будет перезагружена.`);
-                location.reload();
-            } else {
-                alert('Ошибка при обновлении: ' + (res.error || 'Неизвестная ошибка'));
-                if (btnEl) {
-                    btnEl.disabled = false;
-                    btnEl.textContent = originalText;
+                if (updateMsgLabel) {
+                    updateMsgLabel.textContent = `Обновление ${res.commit} установлено! Перезапуск...`;
                 }
+                buttons.forEach(b => {
+                    b.textContent = 'Успешно!';
+                });
+                setTimeout(() => {
+                    location.reload();
+                }, 1200);
+            } else {
+                const errMsg = res.error || 'Неизвестная ошибка';
+                if (updateMsgLabel) {
+                    updateMsgLabel.textContent = `Ошибка: ${errMsg}`;
+                } else {
+                    alert('Ошибка при обновлении: ' + errMsg);
+                }
+                buttons.forEach(b => {
+                    b.disabled = false;
+                    b.textContent = b.dataset.origText || 'Обновить сейчас';
+                });
             }
         })
         .catch(err => {
-            alert('Ошибка сети при обновлении: ' + err);
-            if (btnEl) {
-                btnEl.disabled = false;
-                btnEl.textContent = originalText;
+            const errStr = 'Ошибка сети при обновлении: ' + err;
+            if (updateMsgLabel) {
+                updateMsgLabel.textContent = errStr;
+            } else {
+                alert(errStr);
             }
+            buttons.forEach(b => {
+                b.disabled = false;
+                b.textContent = b.dataset.origText || 'Обновить сейчас';
+            });
         });
 }
 
 if (btnDismissUpdate) {
     btnDismissUpdate.addEventListener('click', () => {
+        if (updateVersionLabel && updateVersionLabel.textContent) {
+            sessionStorage.setItem('nonroot_update_dismissed', updateVersionLabel.textContent.trim());
+        }
         if (updateBanner) updateBanner.classList.add('hidden');
     });
 }
@@ -1672,8 +1743,8 @@ function showModelPickerPopover(anchorEl) {
     popover.classList.remove('hidden');
 
     const rect = anchorEl.getBoundingClientRect();
-    const popoverWidth = 320;
-    const popoverHeight = 350;
+    const popoverWidth = Math.min(320, window.innerWidth - 24);
+    const popoverHeight = Math.min(popover.offsetHeight || 350, 400);
 
     let left = rect.left;
     if (left + popoverWidth > window.innerWidth - 12) {
@@ -1784,6 +1855,8 @@ document.addEventListener('click', (e) => {
         }
     }
 });
+
+window.addEventListener('resize', hideModelPickerPopover);
 
 // ==========================================
 // DeepSeek Auth & Token Management
@@ -1958,5 +2031,6 @@ window.addEventListener('DOMContentLoaded', () => {
     loadModelsList();
     fetchAuthStatus();
     setTimeout(() => checkForUpdates(true), 2000);
+    setInterval(() => checkForUpdates(true), 15 * 60 * 1000); // Check every 15 minutes
 });
 

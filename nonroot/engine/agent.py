@@ -155,9 +155,6 @@ class AutonomousAgent:
                 if self._stop_event.is_set():
                     break
 
-                # Record assistant turn in context
-                self.messages.append({"role": "assistant", "content": content_text})
-
                 # Check if model outputted tool_call blocks in content text directly
                 if not tool_calls and "```tool_call" in content_text:
                     import re
@@ -172,6 +169,30 @@ class AutonomousAgent:
                             })
                         except Exception:
                             pass
+
+                # Record assistant turn in context with tool_calls formatted according to OpenAI spec
+                assistant_msg: Dict[str, Any] = {"role": "assistant", "content": content_text or ""}
+                if tool_calls:
+                    formatted_tool_calls = []
+                    for tc in tool_calls:
+                        tc_id = tc.get("id") or f"call_{uuid.uuid4().hex[:8]}"
+                        tc["id"] = tc_id
+                        args = tc.get("arguments", {})
+                        if isinstance(args, dict):
+                            args_str = json.dumps(args, ensure_ascii=False)
+                        else:
+                            args_str = str(args)
+                        formatted_tool_calls.append({
+                            "id": tc_id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.get("name", "unknown"),
+                                "arguments": args_str
+                            }
+                        })
+                    assistant_msg["tool_calls"] = formatted_tool_calls
+
+                self.messages.append(assistant_msg)
 
                 if not tool_calls:
                     # Model finished turn without tool calls

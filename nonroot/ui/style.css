@@ -513,37 +513,16 @@ body {
 .status-badge.idle .status-dot {
     background: var(--accent-green);
 }
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+
+/* Utility typography & button helpers */
+.font-mono {
+    font-family: var(--font-mono) !important;
+}
+
+.btn-select-folder-modal {
+    padding: 8px 14px;
     font-size: 12.5px;
-}
-
-.session-time {
-    font-size: 10px;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-}
-
-.session-delete {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    padding: 4px;
-    border-radius: 4px;
-    cursor: pointer;
-    display: none;
-    align-items: center;
-    justify-content: center;
-}
-
-.session-item:hover .session-delete {
-    display: flex;
-}
-
-.session-delete:hover {
-    color: var(--accent-danger);
-    background: rgba(239, 68, 68, 0.15);
+    font-weight: 500;
 }
 
 /* ==========================================================================
@@ -2006,8 +1985,9 @@ textarea#prompt-input {
    ========================================================================== */
 .model-picker-popover {
     position: fixed;
-    z-index: 150;
+    z-index: 90;
     width: 320px;
+    max-width: calc(100vw - 24px);
     max-height: 400px;
     background: #16161a;
     border: 1px solid #2a2a34;
@@ -2370,5 +2350,43 @@ textarea#prompt-input {
 ::-webkit-scrollbar-thumb:hover {
     background: #3e3e4c;
 }
+
+/* ==========================================================================
+   RESPONSIVE DESIGN (Narrow Screens & Mobile)
+   ========================================================================== */
+@media (max-width: 768px) {
+    .sidebar-left {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 120;
+        transform: translateX(-100%);
+        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 0 24px rgba(0, 0, 0, 0.6);
+    }
+    .sidebar-left.open {
+        transform: translateX(0);
+    }
+    .prompt-cards {
+        grid-template-columns: 1fr;
+    }
+    .scope-picker-cards {
+        grid-template-columns: 1fr;
+    }
+    .settings-fullscreen-body {
+        flex-direction: column;
+    }
+    .settings-fullscreen-sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #202026;
+    }
+    .btn-msg-rollback, .session-delete {
+        opacity: 0.75;
+        pointer-events: auto;
+    }
+}
+
 
 

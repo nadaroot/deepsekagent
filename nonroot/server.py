@@ -109,26 +109,42 @@ def pick_folder_native(initial_dir: Optional[str] = None) -> Optional[str]:
 
 class EventBroadcaster:
     def __init__(self):
+        self._lock = threading.Lock()
         self.listeners: List[queue.Queue] = []
 
     def subscribe(self) -> queue.Queue:
-        q = queue.Queue(maxsize=100)
-        self.listeners.append(q)
+        q = queue.Queue(maxsize=200)
+        with self._lock:
+            self.listeners.append(q)
         return q
 
     def unsubscribe(self, q: queue.Queue):
-        if q in self.listeners:
-            self.listeners.remove(q)
+        with self._lock:
+            if q in self.listeners:
+                self.listeners.remove(q)
 
     def broadcast(self, event: Dict[str, Any]):
+        with self._lock:
+            listeners = list(self.listeners)
+
         dead = []
-        for q in self.listeners:
+        for q in listeners:
             try:
                 q.put_nowait(event)
+            except queue.Full:
+                try:
+                    q.get_nowait()
+                    q.put_nowait(event)
+                except Exception:
+                    dead.append(q)
             except Exception:
                 dead.append(q)
-        for q in dead:
-            self.unsubscribe(q)
+
+        if dead:
+            with self._lock:
+                for q in dead:
+                    if q in self.listeners:
+                        self.listeners.remove(q)
 
 broadcaster = EventBroadcaster()
 
@@ -300,12 +316,22 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
             if not svg.exists():
                 svg = UI_DIR / "icon.svg"
             self._send_file(svg, "image/svg+xml")
-        else:
-            cand = UI_DIR / path.lstrip("/")
-            if cand.exists() and cand.is_file():
-                self._send_file(cand)
+        elif path == "/version.json":
+            ver_file = ASSETS_DIR / "version.json"
+            if ver_file.exists():
+                self._send_file(ver_file, "application/json; charset=utf-8")
             else:
-                self.send_error(404, "Not Found")
+                self._send_json({"version": "1.1.0", "commit": "unknown"})
+        else:
+            cand = (UI_DIR / path.lstrip("/")).resolve()
+            try:
+                cand.relative_to(UI_DIR.resolve())
+                if cand.exists() and cand.is_file():
+                    self._send_file(cand)
+                else:
+                    self.send_error(404, "Not Found")
+            except (ValueError, Exception):
+                self.send_error(403, "Forbidden")
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
