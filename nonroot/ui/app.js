@@ -396,8 +396,6 @@ window.rollbackToMessage = function(msgIndex) {
     activeAssistantCard = null;
     activeReasoningBox = null;
     activeContentEl = null;
-
-    const session = getActiveSession();
     if (!session || !session.messages || msgIndex < 0 || msgIndex >= session.messages.length) return;
 
     const targetMsg = session.messages[msgIndex];
