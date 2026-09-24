@@ -30,7 +30,10 @@ class AutonomousAgent:
         custom_providers: Optional[List[Dict[str, Any]]] = None,
         on_event: Optional[Callable[[Dict[str, Any]], None]] = None
     ):
-        self.workspace = Path(workspace).resolve()
+        ws = Path(workspace).resolve()
+        if ws == Path("/"):
+            ws = (Path.home() / "Desktop").resolve()
+        self.workspace = ws
         self.api_base_url = api_base_url
         self.api_key = api_key
         self.model = model
@@ -120,7 +123,10 @@ class AutonomousAgent:
         if "max_steps" in kwargs:
             self.max_steps = kwargs["max_steps"]
         if "workspace" in kwargs:
-            self.workspace = Path(kwargs["workspace"]).resolve()
+            ws = Path(kwargs["workspace"]).resolve()
+            if ws == Path("/"):
+                ws = (Path.home() / "Desktop").resolve()
+            self.workspace = ws
             self.file_history.set_workspace(self.workspace)
             self.tool_executor = ToolExecutor(workspace=self.workspace, file_history=self.file_history)
             self.subagent_manager.workspace = self.workspace
@@ -296,6 +302,9 @@ class AutonomousAgent:
                         "content": out_str
                     }
                     if res.get("screenshot"):
+                        for prev_m in self.messages:
+                            if prev_m.get("role") == "tool" and "images" in prev_m:
+                                prev_m.pop("images", None)
                         tool_msg["images"] = [res["screenshot"]]
 
                     self.messages.append(tool_msg)

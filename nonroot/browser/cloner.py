@@ -199,7 +199,10 @@ class SiteCloner:
         if not output_folder:
             output_folder = f"cloned_{domain_clean}"
 
-        target_dir = self.workspace / output_folder
+        ws = self.workspace
+        if ws == Path("/") or not os.access(ws, os.W_OK):
+            ws = (Path.home() / "Desktop").resolve()
+        target_dir = ws / output_folder
         if self.file_history:
             self.file_history.record_dir_before_create(target_dir)
 

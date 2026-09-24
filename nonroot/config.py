@@ -39,7 +39,7 @@ DEFAULT_CONFIG = {
     "model": "deepseek-chat",
     "auto_accept_tools": True,
     "max_steps": 0,
-    "workspace": str(Path.cwd().resolve()),
+    "workspace": str((Path.home() / "Desktop").resolve() if Path.cwd().resolve() == Path("/") else Path.cwd().resolve()),
     "temperature": 0.2,
     "theme": "dark",
     "port": 8765,
@@ -109,7 +109,11 @@ class ConfigManager:
             print(f"[!] Warning: Failed to save config: {e}")
 
     def get(self, key: str, default: Any = None) -> Any:
-        return self.config.get(key, default)
+        val = self.config.get(key, default)
+        if key == "workspace":
+            if not val or val == "/" or str(val).strip() == "/":
+                return str((Path.home() / "Desktop").resolve())
+        return val
 
     def set(self, key: str, value: Any):
         self.config[key] = value

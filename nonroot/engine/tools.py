@@ -13,12 +13,19 @@ from typing import Dict, Any, Optional, Tuple, List
 
 class ToolExecutor:
     def __init__(self, workspace: Path, file_history: Optional[Any] = None):
-        self.workspace = Path(workspace).resolve()
+        ws = Path(workspace).resolve()
+        if ws == Path("/"):
+            ws = (Path.home() / "Desktop").resolve()
+        self.workspace = ws
         self.file_history = file_history
 
     def resolve_path(self, path_str: str) -> Path:
         p = Path(path_str)
         if p.is_absolute():
+            if p.parent == Path("/"):
+                # Writing directly to / on macOS is read-only APFS system snapshot
+                safe_base = (Path.home() / "Desktop").resolve()
+                return (safe_base / p.name).resolve()
             return p
         return (self.workspace / p).resolve()
 
