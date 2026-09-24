@@ -11,17 +11,63 @@ import urllib.error
 from typing import Generator, Dict, Any, List, Optional
 
 DEEPSEEK_MODELS = [
-    {"id": "deepseek-chat", "name": "DeepSeek Chat (V3)", "desc": "Официальная флагманская модель DeepSeek-V3", "group": "Официальные"},
-    {"id": "deepseek-reasoner", "name": "DeepSeek Reasoner (R1)", "desc": "Официальная reasoning-модель R1 с процессом мышления", "group": "Официальные"},
-    {"id": "deepseek-coder", "name": "DeepSeek Coder (33B)", "desc": "Специализированная кодинг-модель", "group": "Официальные"},
-    {"id": "deepseek-ai/DeepSeek-V3", "name": "DeepSeek-V3 (SiliconFlow/Router)", "desc": "DeepSeek V3 через роутер/провайдеры", "group": "Роутеры"},
-    {"id": "deepseek-ai/DeepSeek-R1", "name": "DeepSeek-R1 (SiliconFlow/Router)", "desc": "DeepSeek R1 через роутер/провайдеры", "group": "Роутеры"},
-    {"id": "deepseek-v3", "name": "deepseek-v3 (Alias)", "desc": "Короткий алиас DeepSeek V3", "group": "Алиасы"},
-    {"id": "deepseek-r1", "name": "deepseek-r1 (Alias)", "desc": "Короткий алиас DeepSeek R1", "group": "Алиасы"},
-    {"id": "deepseek-coder-33b-instruct", "name": "DeepSeek Coder 33B Instruct", "desc": "Инструкт-версия Coder 33B", "group": "Кодеры"},
-    {"id": "deepseek-coder-6.7b-instruct", "name": "DeepSeek Coder 6.7B Instruct", "desc": "Быстрая легкая версия кодера", "group": "Кодеры"},
-    {"id": "deepseek-math-7b-instruct", "name": "DeepSeek Math 7B", "desc": "Математическая логика и формулы", "group": "Специализированные"}
+    {
+        "id": "deepseek-chat",
+        "name": "DeepSeek-V3",
+        "desc": "Универсальная быстрая модель для кода и диалога",
+        "group": "DeepSeek (Бесплатно)"
+    },
+    {
+        "id": "deepseek-reasoner",
+        "name": "DeepSeek-R1",
+        "desc": "Глубокие пошаговые рассуждения и логика (<think>)",
+        "group": "DeepSeek (Бесплатно)"
+    },
+    {
+        "id": "deepseek-coder",
+        "name": "DeepSeek Coder",
+        "desc": "Специализированная модель для разработки и кода",
+        "group": "DeepSeek (Бесплатно)"
+    },
+    {
+        "id": "deepseek-v3-search",
+        "name": "DeepSeek-V3 + Поиск",
+        "desc": "DeepSeek-V3 с поиском актуальной информации в сети",
+        "group": "DeepSeek (Бесплатно)"
+    },
+    {
+        "id": "deepseek-reasoner-search",
+        "name": "DeepSeek-R1 + Поиск",
+        "desc": "Рассуждения R1 с доступом к веб-поиску",
+        "group": "DeepSeek (Бесплатно)"
+    },
+    {
+        "id": "deepseek-expert",
+        "name": "DeepSeek Expert",
+        "desc": "Экспертный режим с повышенной детализацией",
+        "group": "DeepSeek (Бесплатно)"
+    },
+    {
+        "id": "deepseek-vision",
+        "name": "DeepSeek Vision",
+        "desc": "Анализ изображений и визуальных скриншотов",
+        "group": "DeepSeek (Бесплатно)"
+    }
 ]
+
+CLIENT_MODEL_ALIASES = {
+    "deepseek-coder-33b-instruct": "deepseek-coder",
+    "deepseek-coder-6.7b-instruct": "deepseek-coder",
+    "deepseek-coder-33b": "deepseek-coder",
+    "deepseek-coder-v2": "deepseek-coder",
+    "deepseek-math-7b-instruct": "deepseek-reasoner",
+    "deepseek-math": "deepseek-reasoner",
+    "deepseek-ai/deepseek-v3": "deepseek-chat",
+    "deepseek-ai/deepseek-r1": "deepseek-reasoner",
+    "deepseek-v3": "deepseek-chat",
+    "deepseek-r1": "deepseek-reasoner",
+    "deepseek-default": "deepseek-chat",
+}
 
 import os
 import time
@@ -134,9 +180,19 @@ class DeepSeekClient:
         existing_ids = {m["id"] for m in models}
 
         # Add models configured in custom providers (OpenAI, OpenRouter, Groq, Ollama, etc.)
+        # ONLY if the provider actually has an API key configured or is a local server (Ollama)
         if self.custom_providers:
             for p in self.custom_providers:
                 p_name = p.get("name", "Провайдер")
+                p_url = p.get("base_url", "").strip()
+                p_key = p.get("api_key", "").strip()
+                is_local = "localhost" in p_url or "127.0.0.1" in p_url
+                has_key = bool(p_key and not p_key.startswith("sk-nonroot-"))
+
+                # Skip unconfigured providers so decorative non-working models do NOT appear
+                if not (has_key or is_local):
+                    continue
+
                 p_models = p.get("models", [])
                 for m_id in p_models:
                     if m_id and m_id not in existing_ids:
@@ -149,28 +205,30 @@ class DeepSeekClient:
                         })
                         existing_ids.add(m_id)
 
-        try:
-            url = f"{self.api_base_url}/models"
-            req = urllib.request.Request(url, headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "User-Agent": "NonRoot/1.0"
-            })
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                remote_models = data.get("data", [])
-                if remote_models:
-                    for m in remote_models:
-                        m_id = m.get("id", "")
-                        if m_id and m_id not in existing_ids:
-                            models.append({
-                                "id": m_id,
-                                "name": m.get("name", m_id),
-                                "desc": m.get("description", "API Модель"),
-                                "group": "Доступные из API"
-                            })
-                            existing_ids.add(m_id)
-        except Exception:
-            pass
+        # Only query remote /models if user explicitly pointed base_url to an external service (e.g. custom Ollama/OpenAI proxy)
+        if "9655" not in self.api_base_url and "3000" not in self.api_base_url:
+            try:
+                url = f"{self.api_base_url}/models"
+                req = urllib.request.Request(url, headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "User-Agent": "NonRoot/1.0"
+                })
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    remote_models = data.get("data", [])
+                    if remote_models:
+                        for m in remote_models:
+                            m_id = m.get("id", "")
+                            if m_id and m_id not in existing_ids:
+                                models.append({
+                                    "id": m_id,
+                                    "name": m.get("name", m_id),
+                                    "desc": m.get("description", "API Модель"),
+                                    "group": "Доступные из API"
+                                })
+                                existing_ids.add(m_id)
+            except Exception:
+                pass
         return models
 
     def stream_chat(
@@ -181,7 +239,9 @@ class DeepSeekClient:
         tools: Optional[List[Dict[str, Any]]] = None,
         images: Optional[List[str]] = None
     ) -> Generator[Dict[str, Any], None, None]:
-        target_base_url, target_api_key = self.get_endpoint_for_model(model)
+        # Normalize any model alias to working name
+        resolved_model = CLIENT_MODEL_ALIASES.get(str(model or "deepseek-chat").strip().lower(), model)
+        target_base_url, target_api_key = self.get_endpoint_for_model(resolved_model)
         if target_base_url == self.api_base_url:
             self._ensure_endpoint_ready()
         url = f"{target_base_url}/chat/completions"
@@ -214,7 +274,7 @@ class DeepSeekClient:
                     last_msg["content"].append({"type": "image_url", "image_url": {"url": img}})
 
         req_body = {
-            "model": model,
+            "model": resolved_model,
             "messages": payload_messages,
             "temperature": temperature,
             "stream": True
