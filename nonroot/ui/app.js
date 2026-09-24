@@ -316,6 +316,54 @@ if (btnNewChat) {
     btnNewChat.addEventListener('click', createNewChat);
 }
 
+window.copyMessageText = function(btn, idx) {
+    const session = getActiveSession();
+    let text = '';
+    if (session && session.messages && session.messages[idx]) {
+        text = session.messages[idx].content || '';
+    } else if (btn && btn.closest('.user-bubble-wrapper')) {
+        const bubble = btn.closest('.user-bubble-wrapper').querySelector('.user-bubble');
+        if (bubble) text = bubble.innerText;
+    }
+    if (!text && text !== '') return;
+
+    const onSuccess = () => {
+        const origHtml = btn.innerHTML;
+        btn.classList.add('copied');
+        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
+        btn.title = "Скопировано!";
+        setTimeout(() => {
+            btn.classList.remove('copied');
+            btn.innerHTML = origHtml;
+            btn.title = "Скопировать текст";
+        }, 1500);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(onSuccess).catch(() => {
+            fallbackCopyText(text, onSuccess);
+        });
+    } else {
+        fallbackCopyText(text, onSuccess);
+    }
+};
+
+function fallbackCopyText(text, cb) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+        document.execCommand('copy');
+        if (cb) cb();
+    } catch (e) {}
+    document.body.removeChild(ta);
+}
+
 window.rollbackToMessage = function(msgIndex) {
     if (!confirm('Откатить диалог до этого действия? Сообщение вернется в поле ввода, а последующие ответы будут удалены.')) {
         return;
@@ -325,6 +373,13 @@ window.rollbackToMessage = function(msgIndex) {
         fetch('/api/stop', { method: 'POST' }).catch(() => {});
         setRunningState(false);
     }
+
+    // Inform backend to truncate agent messages
+    fetch('/api/chat/rollback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index: msgIndex })
+    }).catch(() => {});
 
     currentAssistantTurn = null;
     activeAssistantCard = null;
@@ -385,9 +440,14 @@ function loadActiveSession() {
             }
             userCard.innerHTML = `
                 <div class="user-bubble-wrapper">
-                    <button class="btn-msg-rollback" type="button" title="Откатить до этого сообщения" onclick="rollbackToMessage(${idx})">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a5 5 0 0 1 5 5v2"/><polyline points="8 5 3 10 8 15"/></svg>
-                    </button>
+                    <div class="user-msg-actions">
+                        <button class="btn-msg-action btn-msg-rollback" type="button" title="Откатить до этого сообщения" onclick="rollbackToMessage(${idx})">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a5 5 0 0 1 5 5v2"/><polyline points="8 5 3 10 8 15"/></svg>
+                        </button>
+                        <button class="btn-msg-action btn-msg-copy" type="button" title="Скопировать текст" onclick="copyMessageText(this, ${idx})">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </button>
+                    </div>
                     <div class="user-bubble">${escapeHtml(msg.content)}${imagesHtml}</div>
                 </div>
             `;
@@ -1311,9 +1371,14 @@ function submitPrompt() {
     const userMsgIndex = session ? session.messages.length - 1 : 0;
     userCard.innerHTML = `
         <div class="user-bubble-wrapper">
-            <button class="btn-msg-rollback" type="button" title="Откатить до этого сообщения" onclick="rollbackToMessage(${userMsgIndex})">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a5 5 0 0 1 5 5v2"/><polyline points="8 5 3 10 8 15"/></svg>
-            </button>
+            <div class="user-msg-actions">
+                <button class="btn-msg-action btn-msg-rollback" type="button" title="Откатить до этого сообщения" onclick="rollbackToMessage(${userMsgIndex})">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a5 5 0 0 1 5 5v2"/><polyline points="8 5 3 10 8 15"/></svg>
+                </button>
+                <button class="btn-msg-action btn-msg-copy" type="button" title="Скопировать текст" onclick="copyMessageText(this, ${userMsgIndex})">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+            </div>
             <div class="user-bubble">${escapeHtml(text)}${imagesHtml}</div>
         </div>
     `;
@@ -1377,7 +1442,7 @@ const PROVIDER_PRESETS = {
     deepseek_official: {
         name: 'DeepSeek (Официальный)',
         url: 'https://api.deepseek.com/v1',
-        models: 'deepseek-chat, deepseek-reasoner'
+        models: 'deepseek-chat-official, deepseek-reasoner-official'
     },
     groq: {
         name: 'Groq',
@@ -1529,7 +1594,7 @@ btnOpenSettings.addEventListener('click', () => {
             renderProvidersList();
 
             settingWorkspace.value = cfg.workspace || '';
-            settingMaxSteps.value = cfg.max_steps || 30;
+            settingMaxSteps.value = (cfg.max_steps !== undefined && cfg.max_steps !== null) ? cfg.max_steps : 0;
             settingSystemPrompt.value = cfg.system_prompt || '';
             settingAutoAccept.checked = !!cfg.auto_accept_tools;
             settingsModal.classList.remove('hidden');
@@ -1572,10 +1637,11 @@ window.addEventListener('keydown', (e) => {
 });
 
 btnSaveSettings.addEventListener('click', () => {
+    const rawSteps = parseInt(settingMaxSteps.value, 10);
     const updates = {
         custom_providers: currentProviders,
         workspace: settingWorkspace.value.trim(),
-        max_steps: parseInt(settingMaxSteps.value, 10) || 30,
+        max_steps: isNaN(rawSteps) ? 0 : Math.max(0, rawSteps),
         system_prompt: settingSystemPrompt.value.trim(),
         auto_accept_tools: settingAutoAccept.checked
     };

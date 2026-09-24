@@ -12,6 +12,7 @@ import queue
 import logging
 import threading
 import subprocess
+import shutil
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable, Tuple
 
@@ -92,6 +93,22 @@ class BrowserManager:
             "timestamp": time.time()
         })
 
+
+    def _smooth_mouse_move(self, page, from_x: int, from_y: int, to_x: int, to_y: int, steps: int = 12):
+        """Move mouse smoothly from one point to another with curved trajectory."""
+        import math, random
+        # Add slight randomness to path (bezier-like)
+        mid_x = (from_x + to_x) / 2 + random.randint(-30, 30)
+        mid_y = (from_y + to_y) / 2 + random.randint(-20, 20)
+        for i in range(1, steps + 1):
+            t = i / steps
+            # Quadratic bezier: B(t) = (1-t)^2*P0 + 2(1-t)t*P1 + t^2*P2
+            x = int((1-t)**2 * from_x + 2*(1-t)*t * mid_x + t**2 * to_x)
+            y = int((1-t)**2 * from_y + 2*(1-t)*t * mid_y + t**2 * to_y)
+            page.mouse.move(x, y)
+            time.sleep(random.uniform(0.01, 0.025))
+        self._emit_cursor(x=to_x, y=to_y)
+
     def _ensure_chromium_installed(self) -> bool:
         """Verifies or auto-installs Chromium if needed."""
         cache_dir = Path.home() / "Library" / "Caches" / "ms-playwright"
@@ -139,16 +156,30 @@ class BrowserManager:
             playwright_instance = p_ctx.start()
 
             # Launch Chromium in headless mode with high performance flags
-            browser = playwright_instance.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--hide-scrollbars"
-                ]
-            )
+            launch_args = [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--hide-scrollbars"
+            ]
+
+            browser = None
+            if Path("/Applications/Google Chrome.app").exists() or shutil.which("google-chrome"):
+                try:
+                    browser = playwright_instance.chromium.launch(
+                        channel="chrome",
+                        headless=True,
+                        args=launch_args
+                    )
+                except Exception as c_err:
+                    logging.warning(f"Failed to launch system Google Chrome, falling back: {c_err}")
+
+            if browser is None:
+                browser = playwright_instance.chromium.launch(
+                    headless=True,
+                    args=launch_args
+                )
             context = browser.new_context(
                 viewport=self.viewport_size,
                 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 NonRoot-Agent/1.1.0"
@@ -203,8 +234,7 @@ class BrowserManager:
 
                         if x is not None and y is not None:
                             self._emit_cursor(x=x, y=y, action=desc, ripple=True)
-                            page.mouse.move(x, y)
-                            time.sleep(0.1)
+                            self._smooth_mouse_move(page, self.cursor_pos["x"], self.cursor_pos["y"], x, y)
                             page.mouse.click(x, y)
                             time.sleep(0.4)
 
@@ -334,6 +364,37 @@ class BrowserManager:
                         content = page.content()
                         res = {"success": True, "html": content}
 
+
+                    elif action == "key_press":
+                        key = args.get("key", "Enter")
+                        self._emit_cursor(x=self.cursor_pos["x"], y=self.cursor_pos["y"], action=f"Клавиша: {key}")
+                        # Handle combo keys like Control+a
+                        if "+" in key:
+                            parts = key.split("+")
+                            modifiers = parts[:-1]
+                            main_key = parts[-1]
+                            for mod in modifiers:
+                                page.keyboard.down(mod)
+                            page.keyboard.press(main_key)
+                            for mod in reversed(modifiers):
+                                page.keyboard.up(mod)
+                        else:
+                            page.keyboard.press(key)
+                        time.sleep(0.25)
+
+                        self.current_url = page.url
+                        self.current_title = page.title()
+                        shot = page.screenshot(type="jpeg", quality=80)
+                        self.last_screenshot_b64 = "data:image/jpeg;base64," + base64.b64encode(shot).decode("utf-8")
+                        self._emit_state()
+                        res = {
+                            "success": True,
+                            "key": key,
+                            "url": self.current_url,
+                            "title": self.current_title,
+                            "screenshot_b64": self.last_screenshot_b64
+                        }
+
                     elif action == "close":
                         self.is_running = False
                         res = {"success": True}
@@ -384,6 +445,10 @@ class BrowserManager:
 
     def take_screenshot(self, full_page: bool = False) -> Dict[str, Any]:
         return self._dispatch_command("screenshot", {"full_page": full_page}, timeout=20.0)
+
+
+    def key_press(self, key: str) -> Dict[str, Any]:
+        return self._dispatch_command("key_press", {"key": key}, timeout=15.0)
 
     def get_dom_summary(self) -> Dict[str, Any]:
         return self._dispatch_command("get_dom", {}, timeout=15.0)

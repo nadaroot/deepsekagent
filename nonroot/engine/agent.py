@@ -20,11 +20,11 @@ class AutonomousAgent:
     def __init__(
         self,
         workspace: Path,
-        api_base_url: str = "http://127.0.0.1:3000/v1",
+        api_base_url: str = "http://127.0.0.1:9655/v1",
         api_key: str = "sk-nonroot-free",
         model: str = "deepseek-chat",
         auto_accept: bool = True,
-        max_steps: int = 30,
+        max_steps: int = 0,
         system_prompt: str = "",
         custom_providers: Optional[List[Dict[str, Any]]] = None,
         on_event: Optional[Callable[[Dict[str, Any]], None]] = None
@@ -76,6 +76,14 @@ class AutonomousAgent:
         self.is_running = False
         self._emit("status", {"status": "stopped", "message": "Agent execution stopped by user"})
 
+    def rollback_to(self, index: int):
+        """Rolls back the agent message history to the specified index."""
+        self.stop()
+        if 0 <= index < len(self.messages):
+            self.messages = self.messages[:index]
+        elif index <= 0:
+            self.messages = []
+
     def confirm_tool(self, approved: bool):
         self._tool_approved = approved
         self._tool_confirm_event.set()
@@ -121,9 +129,10 @@ class AutonomousAgent:
             self._emit("user_message", {"content": prompt, "images": images})
 
             step = 0
-            while step < self.max_steps and not self._stop_event.is_set():
+            is_infinite = (self.max_steps is None or self.max_steps <= 0)
+            while (is_infinite or step < self.max_steps) and not self._stop_event.is_set():
                 step += 1
-                self._emit("step_start", {"step": step, "max_steps": self.max_steps})
+                self._emit("step_start", {"step": step, "max_steps": 0 if is_infinite else self.max_steps})
 
                 reasoning_text = ""
                 content_text = ""

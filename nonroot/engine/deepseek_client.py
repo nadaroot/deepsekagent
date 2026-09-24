@@ -106,7 +106,7 @@ class DeepSeekClient:
                 # A custom provider is only active if an API key is explicitly configured,
                 # or if it points to a local server (such as Ollama on localhost)
                 if model in p_models and p_url:
-                    if p_key:
+                    if p_key and not p_key.startswith("sk-nonroot-"):
                         return p_url, p_key
                     elif "localhost" in p_url or "127.0.0.1" in p_url:
                         return p_url, p_key or self.api_key

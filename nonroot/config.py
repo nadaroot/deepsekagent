@@ -38,7 +38,7 @@ DEFAULT_CONFIG = {
     "api_key": "sk-nonroot-free",
     "model": "deepseek-chat",
     "auto_accept_tools": True,
-    "max_steps": 30,
+    "max_steps": 0,
     "workspace": str(Path.cwd().resolve()),
     "temperature": 0.2,
     "theme": "dark",
@@ -71,21 +71,14 @@ class ConfigManager:
         self.config_path = config_path or CONFIG_FILE
         self.config: Dict[str, Any] = self._load()
 
-    def _load(self) -> Dict[str, Any]:
-        cfg = DEFAULT_CONFIG.copy()
-        if self.config_path.exists():
-            try:
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    loaded = json.load(f)
-                    cfg.update(loaded)
-            except Exception:
-                pass
+    def _sanitize(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
         if "custom_providers" not in cfg or not isinstance(cfg["custom_providers"], list):
             cfg["custom_providers"] = DEFAULT_PROVIDERS
         else:
-            # Ensure unauthenticated deepseek_official does not capture default free models
+            # Ensure unauthenticated or fake-key deepseek_official does not capture default free models
             for p in cfg["custom_providers"]:
-                if p.get("id") == "deepseek_official" and not p.get("api_key", "").strip():
+                key = p.get("api_key", "").strip()
+                if p.get("id") == "deepseek_official" and (not key or key.startswith("sk-nonroot-")):
                     p["models"] = [m for m in p.get("models", []) if m not in ("deepseek-chat", "deepseek-reasoner")]
                     if not p["models"]:
                         p["models"] = ["deepseek-chat-official", "deepseek-reasoner-official"]
@@ -95,6 +88,17 @@ class ConfigManager:
             cfg["api_base_url"] = "http://127.0.0.1:9655/v1"
 
         return cfg
+
+    def _load(self) -> Dict[str, Any]:
+        cfg = DEFAULT_CONFIG.copy()
+        if self.config_path.exists():
+            try:
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                    cfg.update(loaded)
+            except Exception:
+                pass
+        return self._sanitize(cfg)
 
     def save(self):
         try:
@@ -109,10 +113,12 @@ class ConfigManager:
 
     def set(self, key: str, value: Any):
         self.config[key] = value
+        self.config = self._sanitize(self.config)
         self.save()
 
     def update(self, updates: Dict[str, Any]):
         self.config.update(updates)
+        self.config = self._sanitize(self.config)
         self.save()
 
 # Global instance

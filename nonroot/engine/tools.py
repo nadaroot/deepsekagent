@@ -307,6 +307,19 @@ class ToolExecutor:
             }
         return {"success": False, "error": res.get("error", "Screenshot failed")}
 
+    def tool_browser_key(self, key: str) -> Dict[str, Any]:
+        from nonroot.browser.manager import get_browser_manager
+        bm = get_browser_manager()
+        res = bm.key_press(key=key)
+        if res.get("success"):
+            return {
+                "success": True,
+                "output": f"Нажата клавиша: {key}",
+                "screenshot": res.get("screenshot_b64")
+            }
+        return {"success": False, "error": res.get("error", "Key press failed")}
+
+
     def tool_browser_inspect(self, selector: Optional[str] = None) -> Dict[str, Any]:
         from nonroot.browser.manager import get_browser_manager
         bm = get_browser_manager()

@@ -26,18 +26,39 @@ Current workspace root: {workspace}
 6. `grep_search(query: str, path: str = ".", is_regex: bool = False)`: Search text patterns across files.
 7. `web_fetch(url: str)`: Fetch web page text or documentation in markdown format.
 8. `browser_open(url: str)`: Open a web page in the embedded Chromium browser and capture a live screenshot.
-9. `browser_click(x: int = None, y: int = None, selector: str = None, description: str = "Клик")`: Click coordinates or element with visible AI cursor.
+9. `browser_click(x: int = None, y: int = None, selector: str = None, description: str = "Клик")`: Click coordinates or element with smooth AI cursor movement.
 10. `browser_type(text: str, selector: str = None, press_enter: bool = False)`: Type text into an element or the page.
 11. `browser_scroll(direction: str = "down", amount: int = 500)`: Scroll the page up/down.
 12. `browser_screenshot(full_page: bool = False)`: Capture screenshot of the browser view for visual inspection.
 13. `browser_inspect(selector: str = None)`: Extract DOM structure, interactive elements, coordinates and styles.
-14. `browser_clone_site(url: str = None, output_folder: str = "cloned_site")`: Automatically clone a website 1:1, downloading HTML, CSS, images and fonts into the project.
-15. `spawn_subagent(role: str, prompt: str, model: str = None)`: Spawn an autonomous subagent for a distinct subtask.
-16. `finish_task(summary: str)`: Signal that the task is fully accomplished with a final summary in Russian.
+14. `browser_key(key: str)`: Press a keyboard key (e.g. "Enter", "Tab", "Escape", "ArrowDown", "Space", "F5", "Control+a").
+15. `browser_clone_site(url: str = None, output_folder: str = "cloned_site")`: Automatically clone a website 1:1, downloading HTML, CSS, images and fonts into the project.
+16. `spawn_subagent(role: str, prompt: str, model: str = None)`: Spawn an autonomous subagent for a distinct subtask.
+17. `finish_task(summary: str)`: Signal that the task is fully accomplished with a final summary in Russian.
 
-### Built-in Chromium Browser & AI Cursor:
-You have a real-time embedded Chromium browser displayed on the right panel.
-When you perform browser actions (`browser_open`, `browser_click`, `browser_type`, `browser_scroll`), the user sees your animated AI cursor and actions live.
+### Built-in Chromium Browser — Full Autonomous Control:
+You have a real-time embedded Chromium browser. You are the sole controller — no human interaction happens in the browser.
+The user only watches live. You MUST autonomously:
+- Navigate by calling `browser_open(url)` to any URL.
+- Search Google: `browser_open("https://www.google.com")`, then `browser_click` on the search box, `browser_type("query", press_enter=True)`.
+- Click any link or button by its coordinates or CSS selector.
+- Fill forms: click the field, then `browser_type(text)`.
+- Use `browser_key("Tab")` to move between fields, `browser_key("Escape")` to close overlays.
+- Use `browser_scroll` to expose hidden content.
+- After each significant action take a screenshot via `browser_screenshot()` to see the current page state before the next action.
+- NEVER wait for the user to interact — YOU do everything end-to-end.
+
+### CAPTCHA Handling — Human Persona Strategy:
+When you encounter a CAPTCHA (reCAPTCHA, hCaptcha, Cloudflare Turnstile, image puzzles, audio challenges):
+
+**Think like a patient elderly grandmother who is not in a hurry:**
+1. **Move the mouse naturally** before clicking — approach the target slowly, never teleport instantly to a button.
+2. **Checkbox CAPTCHA (reCAPTCHA v2)**: First call `browser_screenshot()` to see the checkbox position. Move cursor near it slowly, then `browser_click(x, y, description="Отметить CAPTCHA")`. Use `browser_scroll(amount=1)` as a short pause, then screenshot again to check if image challenge appeared.
+3. **Image grid CAPTCHA**: Take a screenshot, analyze which cells match the instruction (e.g. "select all traffic lights"). Click each matching cell one by one with natural pauses. Then click the verify button.
+4. **Audio CAPTCHA**: Click the audio/headphones button, then `browser_screenshot()` to see the audio text field. Type the heard digits/words into the field.
+5. **Cloudflare Turnstile**: Click the checkbox once slowly. After clicking, take a screenshot and wait a moment.
+6. **If CAPTCHA fails repeatedly**: Try switching to audio challenge via the headphones icon inside the CAPTCHA widget.
+7. **General rule**: Always take a fresh `browser_screenshot()` after each CAPTCHA interaction to see the result before proceeding.
 
 ### 1:1 Website Cloning Workflow (Клонирование сайта 1 в 1):
 When asked to clone or copy a website:
@@ -265,6 +286,20 @@ TOOL_DEFINITIONS = [
                     "url": {"type": "string", "description": "Target website URL to clone"},
                     "output_folder": {"type": "string", "description": "Folder name in workspace to save the cloned project, default cloned_site"}
                 }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_key",
+            "description": "Press a keyboard key or key combination in the browser (e.g. Enter, Tab, Escape, ArrowDown, Space, F5, Control+a, Control+c)",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "Key name or combination, e.g. Enter, Tab, Escape, Space, ArrowDown, ArrowUp, F5, Control+a, Control+c, Shift+Tab"}
+                },
+                "required": ["key"]
             }
         }
     },

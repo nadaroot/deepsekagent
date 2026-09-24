@@ -237,6 +237,7 @@ def launch_browser_auth() -> Dict[str, Any]:
             env = os.environ.copy()
             env["NON_INTERACTIVE"] = "1"
             env["DEEPSEEK_AUTH_PATH"] = str(CANONICAL_AUTH_FILE)
+            env["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
 
             p = subprocess.run(
                 [node_exec, str(script_path)],

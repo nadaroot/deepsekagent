@@ -210,10 +210,6 @@
 
                 <!-- Action badges & Close -->
                 <div class="browser-status-group">
-                    <div class="browser-live-badge" title="Живая трансляция экрана">
-                        <span class="live-dot"></span>
-                        <span>LIVE</span>
-                    </div>
                     <div class="browser-ai-badge" id="browser-ai-badge" title="Статус управления нейросетью">
                         <span class="ai-status-dot"></span>
                         <span id="browser-ai-status-text">ИИ готов</span>
@@ -260,10 +256,7 @@
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                         <span>Клонировать 1 в 1</span>
                     </button>
-                    <button class="btn-browser-action secondary" id="btn-browser-inspect-chat" title="Отправить скриншот в чат агенту" type="button">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                        <span>Снимок</span>
-                    </button>
+
                 </div>
             </div>
         </aside>
@@ -527,8 +520,8 @@
 
                             <div class="form-group">
                                 <label class="form-label">Лимит шагов автономного цикла</label>
-                                <input type="number" id="setting-max-steps" class="form-input" value="30" min="5" max="100">
-                                <div class="form-hint">Максимальное количество шагов reasoning + tools на один запрос пользователя</div>
+                                <input type="number" id="setting-max-steps" class="form-input" value="0" min="0" max="9999" placeholder="0 — бесконечно">
+                                <div class="form-hint">Количество шагов автономного цикла (0 — бесконечно, агент работает до полного решения задачи)</div>
                             </div>
 
                             <div class="form-group">

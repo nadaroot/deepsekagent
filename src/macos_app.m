@@ -8,7 +8,7 @@
 #import <netinet/in.h>
 #import <arpa/inet.h>
 
-@interface AppDelegate : NSObject <NSApplicationDelegate, WKNavigationDelegate, NSWindowDelegate, WKScriptMessageHandler>
+@interface AppDelegate : NSObject <NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, NSWindowDelegate, WKScriptMessageHandler>
 @property (strong, nonatomic) NSWindow *window;
 @property (strong, nonatomic) WKWebView *webView;
 @property (strong, nonatomic) NSTask *pythonTask;
@@ -122,6 +122,7 @@
     self.webView = [[WKWebView alloc] initWithFrame:self.window.contentView.bounds configuration:config];
     self.webView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     self.webView.navigationDelegate = self;
+    self.webView.UIDelegate = self;
     self.webView.wantsLayer = YES;
     self.webView.layer.backgroundColor = [NSColor colorWithRed:9.0/255.0 green:9.0/255.0 blue:11.0/255.0 alpha:1.0].CGColor;
     [self.webView setValue:@NO forKey:@"drawsBackground"];
@@ -354,6 +355,28 @@
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     [self.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
+}
+
+// WKUIDelegate - Native Alert & Confirm dialog support
+- (void)webView:(WKWebView *)webView runJavaScriptAlertPanelWithMessage:(NSString *)message initiatedByFrame:(WKFrameInfo *)frame completionHandler:(void (^)(void))completionHandler {
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"NonRoot";
+    alert.informativeText = message;
+    [alert addButtonWithTitle:@"ОК"];
+    [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
+        completionHandler();
+    }];
+}
+
+- (void)webView:(WKWebView *)webView runJavaScriptConfirmPanelWithMessage:(NSString *)message initiatedByFrame:(WKFrameInfo *)frame completionHandler:(void (^)(BOOL result))completionHandler {
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"Подтверждение";
+    alert.informativeText = message;
+    [alert addButtonWithTitle:@"Да"];
+    [alert addButtonWithTitle:@"Отмена"];
+    [alert beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse returnCode) {
+        completionHandler(returnCode == NSAlertFirstButtonReturn);
+    }];
 }
 
 // NSApplicationDelegate

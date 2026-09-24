@@ -377,6 +377,17 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
             self._send_json({"success": True, "message": "Agent stopped"})
             return
 
+        if path == "/api/chat/rollback":
+            raw_idx = body.get("index")
+            if raw_idx is not None:
+                try:
+                    idx = int(raw_idx)
+                    active_agent.rollback_to(idx)
+                except Exception:
+                    pass
+            self._send_json({"success": True, "message": "Rolled back successfully"})
+            return
+
         if path == "/api/workspace/set":
             new_ws = body.get("workspace", "/").strip()
             if not new_ws:
