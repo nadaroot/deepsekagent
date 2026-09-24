@@ -524,13 +524,12 @@ function loadActiveSession() {
         }
     }
 
-    if (btnToggleBrowser) {
-        if (hasBrowserActivity) {
-            btnToggleBrowser.classList.remove('hidden');
-        } else {
-            btnToggleBrowser.classList.add('hidden');
-            toggleBrowserSidepanel(false);
-        }
+    if (hasBrowserActivity) {
+        if (btnToggleBrowser) btnToggleBrowser.classList.remove('hidden');
+        toggleBrowserSidepanel(true);
+    } else {
+        if (btnToggleBrowser) btnToggleBrowser.classList.add('hidden');
+        toggleBrowserSidepanel(false);
     }
 
     scrollToBottom();
@@ -1675,7 +1674,7 @@ function checkForUpdates(silent = false) {
             }
 
             if (res.has_update) {
-                const dismissedCommit = sessionStorage.getItem('nonroot_update_dismissed');
+                const dismissedCommit = localStorage.getItem('nonroot_update_dismissed');
                 if (updateBanner && (!silent || dismissedCommit !== res.latest_commit)) {
                     if (updateVersionLabel) updateVersionLabel.textContent = res.latest_commit || 'новая версия';
                     if (updateMsgLabel) updateMsgLabel.textContent = res.message || 'Новые коммиты в git';
@@ -1689,6 +1688,9 @@ function checkForUpdates(silent = false) {
                     btnApplyUpdateModal.classList.remove('hidden');
                 }
             } else {
+                if (updateBanner) {
+                    updateBanner.classList.add('hidden');
+                }
                 if (!silent && updateCheckStatus) {
                     if (res.error) {
                         updateCheckStatus.textContent = `Ошибка: ${res.error}`;
@@ -1763,7 +1765,7 @@ function applyUpdate(btnEl) {
 if (btnDismissUpdate) {
     btnDismissUpdate.addEventListener('click', () => {
         if (updateVersionLabel && updateVersionLabel.textContent) {
-            sessionStorage.setItem('nonroot_update_dismissed', updateVersionLabel.textContent.trim());
+            localStorage.setItem('nonroot_update_dismissed', updateVersionLabel.textContent.trim());
         }
         if (updateBanner) updateBanner.classList.add('hidden');
     });
@@ -2198,6 +2200,9 @@ function fetchBrowserState() {
 
 function handleBrowserStateEvent(data) {
     if (!data) return;
+    if (data.screenshot || (data.url && data.url !== 'about:blank')) {
+        toggleBrowserSidepanel(true);
+    }
 
     if (data.url) {
         currentBrowserUrl = data.url;

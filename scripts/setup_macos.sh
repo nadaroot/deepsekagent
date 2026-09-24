@@ -11,6 +11,17 @@ mkdir -p "$HOME/.local/bin"
 mkdir -p "$HOME/Applications"
 mkdir -p "$HOME/.nonroot/app"
 
+# 1. Record exact current git commit into assets/version.json
+GIT_COMMIT=$(git -C "$BASE_DIR" rev-parse HEAD 2>/dev/null | cut -c1-7 || echo "latest")
+BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+cat << VER_EOF > "$BASE_DIR/assets/version.json"
+{
+  "version": "1.1.0",
+  "commit": "$GIT_COMMIT",
+  "updated_at": "$BUILD_TIME"
+}
+VER_EOF
+
 # 1. Sync self-contained bundle & ~/.nonroot/app
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"

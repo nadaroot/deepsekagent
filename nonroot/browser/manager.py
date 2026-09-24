@@ -226,11 +226,17 @@ class BrowserManager:
                         desc = args.get("description", "Клик")
 
                         if selector:
-                            loc = page.locator(selector).first
-                            box = loc.bounding_box()
-                            if box:
-                                x = int(box["x"] + box["width"] / 2)
-                                y = int(box["y"] + box["height"] / 2)
+                            try:
+                                loc = page.locator(selector).first
+                                loc.scroll_into_view_if_needed(timeout=3000)
+                                box = loc.bounding_box()
+                                if box:
+                                    x = int(box["x"] + box["width"] / 2)
+                                    y = int(box["y"] + box["height"] / 2)
+                                else:
+                                    loc.click(timeout=2000)
+                            except Exception as loc_err:
+                                logging.warning(f"Locator click failed for {selector}: {loc_err}")
 
                         if x is not None and y is not None:
                             self._emit_cursor(x=x, y=y, action=desc, ripple=True)
@@ -258,13 +264,18 @@ class BrowserManager:
                         press_enter = args.get("press_enter", False)
 
                         if selector:
-                            loc = page.locator(selector).first
-                            box = loc.bounding_box()
-                            if box:
-                                x = int(box["x"] + box["width"] / 2)
-                                y = int(box["y"] + box["height"] / 2)
-                                self._emit_cursor(x=x, y=y, action=f"Ввод: {text[:20]}...", ripple=True)
-                                page.mouse.click(x, y)
+                            try:
+                                loc = page.locator(selector).first
+                                loc.scroll_into_view_if_needed(timeout=3000)
+                                loc.click(timeout=2000)
+                                box = loc.bounding_box()
+                                if box:
+                                    x = int(box["x"] + box["width"] / 2)
+                                    y = int(box["y"] + box["height"] / 2)
+                                    self._smooth_mouse_move(page, self.cursor_pos["x"], self.cursor_pos["y"], x, y)
+                                    self._emit_cursor(x=x, y=y, action=f"Ввод: {text[:20]}...", ripple=True)
+                            except Exception as loc_err:
+                                logging.warning(f"Could not focus selector {selector}: {loc_err}")
                         else:
                             self._emit_cursor(x=self.cursor_pos["x"], y=self.cursor_pos["y"], action=f"Ввод: {text[:20]}...")
 

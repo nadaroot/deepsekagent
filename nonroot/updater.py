@@ -24,21 +24,16 @@ GITHUB_ZIP_URL = f"https://codeload.github.com/{GITHUB_REPO}/zip/refs/heads/main
 
 def get_repo_dir() -> Optional[Path]:
     """Finds the true NonRoot git repository directory, avoiding random user workspaces."""
-    # 1. Check parent of package
-    pkg_parent = Path(__file__).resolve().parent.parent
-    if (pkg_parent / ".git").exists() and (pkg_parent / "nonroot").exists():
-        return pkg_parent
-
-    # 2. Check ~/.nonroot/repo if cloned there
-    home_repo = Path.home() / ".nonroot" / "repo"
-    if (home_repo / ".git").exists() and (home_repo / "nonroot").exists():
-        return home_repo
-
-    # 3. Check CWD only if it is genuinely the NonRoot source repository
-    cwd = Path.cwd()
-    if (cwd / ".git").exists() and (cwd / "nonroot" / "updater.py").exists():
-        return cwd
-
+    candidates = [
+        Path(__file__).resolve().parent.parent,
+        Path.home() / ".nonroot" / "repo",
+        Path("/Users/mac/Documents/strim/playerok/nonroot"),
+        Path.home() / "Documents" / "strim" / "playerok" / "nonroot",
+        Path.cwd()
+    ]
+    for p in candidates:
+        if (p / ".git").exists() and (p / "nonroot").exists():
+            return p
     return None
 
 def get_installed_app_dir() -> Optional[Path]:
@@ -147,26 +142,33 @@ def check_for_updates() -> Dict[str, Any]:
                 cwd=str(repo), capture_output=True, text=True, timeout=10, env=env
             )
             if p_fetch.returncode == 0:
+                # Count commits where origin/main is strictly ahead of local HEAD
+                p_ahead = subprocess.run(
+                    ["git", "rev-list", "HEAD..origin/main", "--count"],
+                    cwd=str(repo), capture_output=True, text=True, timeout=6
+                )
+                ahead_count = int(p_ahead.stdout.strip()) if (p_ahead.returncode == 0 and p_ahead.stdout.strip().isdigit()) else 0
+
                 p_remote = subprocess.run(["git", "rev-parse", "origin/main"], cwd=str(repo), capture_output=True, text=True, timeout=6)
-                if p_remote.returncode == 0:
-                    remote_hash = p_remote.stdout.strip()
-                    remote_short = remote_hash[:7]
-                    if current_commit != remote_short:
-                        p_log = subprocess.run(["git", "log", "-1", "--pretty=%s", "origin/main"], cwd=str(repo), capture_output=True, text=True, timeout=6)
-                        msg = p_log.stdout.strip() if p_log.returncode == 0 else "Новое обновление"
-                        return {
-                            "has_update": True,
-                            "current_commit": current_commit,
-                            "latest_commit": remote_short,
-                            "message": msg,
-                            "method": "git"
-                        }
-                    else:
-                        return {
-                            "has_update": False,
-                            "current_commit": current_commit,
-                            "method": "git"
-                        }
+                remote_short = p_remote.stdout.strip()[:7] if p_remote.returncode == 0 else ""
+
+                if ahead_count > 0:
+                    p_log = subprocess.run(["git", "log", "-1", "--pretty=%s", "origin/main"], cwd=str(repo), capture_output=True, text=True, timeout=6)
+                    msg = p_log.stdout.strip() if p_log.returncode == 0 else "Новое обновление"
+                    return {
+                        "has_update": True,
+                        "current_commit": current_commit,
+                        "latest_commit": remote_short,
+                        "ahead_count": ahead_count,
+                        "message": msg,
+                        "method": "git"
+                    }
+                else:
+                    return {
+                        "has_update": False,
+                        "current_commit": current_commit,
+                        "method": "git"
+                    }
         except Exception:
             pass
 
