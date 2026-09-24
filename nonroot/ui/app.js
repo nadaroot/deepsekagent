@@ -365,7 +365,7 @@ function fallbackCopyText(text, cb) {
 }
 
 window.rollbackToMessage = function(msgIndex) {
-    if (!confirm('Откатить диалог до этого действия? Сообщение вернется в поле ввода, а последующие ответы будут удалены.')) {
+    if (!confirm('Откатить диалог и файлы до этого действия? Сообщение вернется в поле ввода, а созданные или измененные файлы будут возвращены к прежнему состоянию.')) {
         return;
     }
     currentRunGeneration++;
@@ -374,11 +374,22 @@ window.rollbackToMessage = function(msgIndex) {
         setRunningState(false);
     }
 
-    // Inform backend to truncate agent messages
+    const session = getActiveSession();
+    const userTurnIndex = session && session.messages ? 
+        session.messages.slice(0, msgIndex).filter(m => m.role === 'user').length : 
+        Math.floor(msgIndex / 2);
+
+    // Inform backend to truncate agent messages and rollback files
     fetch('/api/chat/rollback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ index: msgIndex })
+        body: JSON.stringify({ index: msgIndex, user_turn: userTurnIndex })
+    }).then(r => r.json()).then(data => {
+        if (data.restored_files && data.restored_files.length > 0) {
+            updateStatus('idle', `Откат: файлов восстановлено/удалено: ${data.restored_files.length}`);
+        } else {
+            updateStatus('idle', 'Откат завершен');
+        }
     }).catch(() => {});
 
     currentAssistantTurn = null;
@@ -945,7 +956,7 @@ function handleAgentEvent(evt) {
 
         case 'tool_start':
             ensureAssistantCard();
-            if (evt.name && evt.name.startsWith('browser_')) {
+            if (evt.name && (evt.name.startsWith('browser_') || evt.name.includes('search'))) {
                 if (btnToggleBrowser) btnToggleBrowser.classList.remove('hidden');
                 toggleBrowserSidepanel(true);
             }
@@ -959,7 +970,7 @@ function handleAgentEvent(evt) {
             break;
 
         case 'tool_end':
-            if (evt.name && evt.name.startsWith('browser_')) {
+            if (evt.name && (evt.name.startsWith('browser_') || evt.name.includes('search'))) {
                 if (evt.result && evt.result.screenshot) {
                     handleBrowserStateEvent({
                         screenshot: evt.result.screenshot,
@@ -1150,13 +1161,17 @@ window.toggleReasoning = function(header) {
 };
 
 function appendContent(text) {
-    if (activeContentEl) {
-        const currentRaw = activeContentEl.getAttribute('data-raw') || '';
-        const newRaw = currentRaw + text;
-        activeContentEl.setAttribute('data-raw', newRaw);
-        activeContentEl.innerHTML = formatMarkdown(newRaw);
-        scrollToBottom();
+    if (!activeAssistantCard) ensureAssistantCard();
+    if (!activeContentEl) {
+        activeContentEl = document.createElement('div');
+        activeContentEl.className = 'assistant-content';
+        activeAssistantCard.appendChild(activeContentEl);
     }
+    const currentRaw = activeContentEl.getAttribute('data-raw') || '';
+    const newRaw = currentRaw + text;
+    activeContentEl.setAttribute('data-raw', newRaw);
+    activeContentEl.innerHTML = formatMarkdown(newRaw);
+    scrollToBottom();
 }
 
 function appendError(msg) {
@@ -1208,10 +1223,14 @@ function renderToolStart(id, name, args) {
     card.className = 'tool-card';
     card.id = `tool-card-${id}`;
 
+    activeContentEl = null; // New assistant text after this tool will be placed below
     let argSummary = '';
     if (name === 'run_command') argSummary = args.command || '';
     else if (name === 'read_file' || name === 'write_file' || name === 'edit_file') argSummary = args.path || '';
-    else if (name === 'web_fetch') argSummary = args.url || '';
+    else if (name === 'web_fetch' || name === 'browser_open') argSummary = args.url || '';
+    else if (name === 'google_search' || name === 'web_search') argSummary = args.query || '';
+    else if (name === 'browser_type') argSummary = args.text || '';
+    else if (name === 'browser_click') argSummary = args.description || args.selector || '';
 
     card.innerHTML = `
         <div class="tool-header">
@@ -1256,6 +1275,9 @@ function formatMarkdown(raw) {
         .replace(/```json\s*\{\s*"tool_call"[\s\S]*?```/gi, '')
         .replace(/\{\s*"tool_call"\s*:\s*\{[\s\S]*?\}\s*\}/gi, '')
         .trim();
+
+    // Strip stray braces left behind by tool arguments
+    clean = clean.replace(/^\s*\}\s*$/gm, '').trim();
 
     if (!clean && /tool_call/i.test(raw)) {
         return '<span class="action-narrative">Выполняю действия...</span>';

@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
 
 class ToolExecutor:
-    def __init__(self, workspace: Path):
+    def __init__(self, workspace: Path, file_history: Optional[Any] = None):
         self.workspace = Path(workspace).resolve()
+        self.file_history = file_history
 
     def resolve_path(self, path_str: str) -> Path:
         p = Path(path_str)
@@ -107,6 +108,8 @@ class ToolExecutor:
     def tool_write_file(self, path: str, content: str) -> Dict[str, Any]:
         p = self.resolve_path(path)
         try:
+            if self.file_history:
+                self.file_history.record_file_before_change(p)
             p.parent.mkdir(parents=True, exist_ok=True)
             with open(p, "w", encoding="utf-8") as f:
                 f.write(content)
@@ -142,6 +145,9 @@ class ToolExecutor:
                     "error": f"Target string found {count} times. Please provide a more specific unique context snippet.",
                     "output": ""
                 }
+
+            if self.file_history:
+                self.file_history.record_file_before_change(p)
 
             new_text = file_text.replace(search_target, replacement, 1)
             with open(p, "w", encoding="utf-8") as f:
@@ -245,6 +251,83 @@ class ToolExecutor:
         except Exception as e:
             return {"success": False, "error": f"Failed to fetch URL: {str(e)}", "output": ""}
 
+    def tool_google_search(self, query: str) -> Dict[str, Any]:
+        """Search Google via embedded browser with stealth, auto-consent, and fallback."""
+        import urllib.parse
+        import time
+        from nonroot.browser.manager import get_browser_manager
+        bm = get_browser_manager()
+        encoded = urllib.parse.quote_plus(query)
+        search_url = f"https://www.google.com/search?q={encoded}&hl=ru"
+        res = bm.navigate(search_url)
+        if not res.get("success"):
+            return {"success": False, "error": res.get("error", "Failed to navigate to Google")}
+
+        time.sleep(0.5)
+
+        # Check if Google returned a CAPTCHA or 'sorry' page
+        cur_url = res.get("url", "").lower()
+        if "sorry/index" in cur_url or "recaptcha" in cur_url:
+            bm.solve_captcha()
+            time.sleep(1.0)
+            res = bm.take_screenshot()
+            cur_url = bm.current_url.lower()
+
+            # If still blocked by Google network CAPTCHA, fallback to Yandex
+            if "sorry/index" in cur_url or "recaptcha" in cur_url:
+                yandex_url = f"https://ya.ru/search/?text={encoded}"
+                res = bm.navigate(yandex_url)
+                time.sleep(0.5)
+
+        dom_res = bm.get_dom_summary()
+        elements = dom_res.get("elements", []) if dom_res.get("success") else []
+
+        search_results = []
+        for el in elements:
+            txt = el.get("text", "").strip()
+            if txt and len(txt) > 6 and el.get("tag") in ["h3", "a"]:
+                search_results.append({
+                    "title": txt[:120],
+                    "tag": el.get("tag"),
+                    "x": el.get("x"),
+                    "y": el.get("y")
+                })
+
+        summary = f"Результаты поиска по запросу '{query}' (URL: {res.get('url')}):\nнайдено элементов: {len(search_results)}.\n\n"
+        for i, item in enumerate(search_results[:10], 1):
+            summary += f"{i}. [{item['tag']}] {item['title']} (клик: x={item['x']}, y={item['y']})\n"
+
+        return {
+            "success": True,
+            "query": query,
+            "url": res.get("url"),
+            "title": res.get("title"),
+            "screenshot": res.get("screenshot_b64"),
+            "output": summary
+        }
+
+    def tool_browser_solve_captcha(self) -> Dict[str, Any]:
+        """Detect and solve or click CAPTCHA checkbox (Cloudflare Turnstile, Google reCAPTCHA, hCaptcha) on current page."""
+        from nonroot.browser.manager import get_browser_manager
+        bm = get_browser_manager()
+        res = bm.solve_captcha()
+        if res.get("success"):
+            return {
+                "success": True,
+                "output": f"Успешно обработан элемент капчи: {res.get('message')} (тип: {res.get('type')})",
+                "screenshot": res.get("screenshot_b64"),
+                "url": res.get("url")
+            }
+        return {
+            "success": False,
+            "error": res.get("message", "Элементы капчи не найдены или проверка не требует клика"),
+            "screenshot": res.get("screenshot_b64"),
+            "url": res.get("url")
+        }
+
+    def tool_web_search(self, query: str) -> Dict[str, Any]:
+        return self.tool_google_search(query=query)
+
     def tool_browser_open(self, url: str) -> Dict[str, Any]:
         from nonroot.browser.manager import get_browser_manager
         bm = get_browser_manager()
@@ -341,7 +424,7 @@ class ToolExecutor:
         if not target_url or target_url == "about:blank":
             return {"success": False, "error": "Не указан URL для клонирования"}
 
-        cloner = SiteCloner(workspace=self.workspace)
+        cloner = SiteCloner(workspace=self.workspace, file_history=self.file_history)
         res = cloner.clone(url=target_url, output_folder=output_folder)
         if res.get("success"):
             return {

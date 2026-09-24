@@ -94,6 +94,93 @@ class BrowserManager:
         })
 
 
+
+    def _auto_dismiss_consent(self, page):
+        """Auto-clicks Google/Yandex cookie and privacy consent barriers."""
+        try:
+            for sel in [
+                'button:has-text("Принять все")',
+                'button:has-text("Accept all")',
+                'button:has-text("I agree")',
+                'button:has-text("Alle akzeptieren")',
+                'button#L2AGLb',
+                'form[action*="consent"] button',
+                'div[role="none"] button:has-text("Принять")',
+                'button:has-text("Понятно")',
+                'button:has-text("Согласен")',
+                'button:has-text("Got it")'
+            ]:
+                loc = page.locator(sel).first
+                if loc.is_visible(timeout=800):
+                    loc.click(timeout=1000)
+                    time.sleep(0.3)
+                    break
+        except Exception:
+            pass
+
+    def _solve_captcha_worker(self, page) -> Dict[str, Any]:
+        """Detects and automatically interacts with Cloudflare Turnstile, reCAPTCHA v2, hCaptcha."""
+        # 1. Cloudflare Turnstile
+        for frame in [page] + page.frames:
+            try:
+                cf = frame.locator('input[type="checkbox"], div.ctp-checkbox-label, #challenge-stage input, .cf-turnstile-wrapper iframe').first
+                if cf.is_visible(timeout=800):
+                    box = cf.bounding_box()
+                    if box:
+                        cx, cy = int(box["x"] + box["width"]/2), int(box["y"] + box["height"]/2)
+                        self._smooth_mouse_move(page, self.cursor_pos["x"], self.cursor_pos["y"], cx, cy)
+                        time.sleep(0.2)
+                        page.mouse.click(cx, cy)
+                        time.sleep(1.5)
+                        return {"success": True, "type": "turnstile", "message": "Нажат чекбокс Cloudflare Turnstile"}
+            except Exception:
+                pass
+
+        # 2. Google reCAPTCHA v2
+        for frame in page.frames:
+            try:
+                rc = frame.locator('.recaptcha-checkbox-border, #recaptcha-anchor, span[role="checkbox"]').first
+                if rc.is_visible(timeout=800):
+                    rc.click(timeout=1500)
+                    time.sleep(1.5)
+                    return {"success": True, "type": "recaptcha_v2", "message": "Нажат чекбокс Google reCAPTCHA"}
+            except Exception:
+                pass
+
+        # 3. hCaptcha
+        for frame in page.frames:
+            try:
+                hc = frame.locator('#checkbox, div[aria-label*="captcha"]').first
+                if hc.is_visible(timeout=800):
+                    hc.click(timeout=1500)
+                    time.sleep(1.5)
+                    return {"success": True, "type": "hcaptcha", "message": "Нажат чекбокс hCaptcha"}
+            except Exception:
+                pass
+
+        # 4. Audio challenge fallback
+        for frame in page.frames:
+            try:
+                ab = frame.locator('#recaptcha-audio-button, button[title*="звук"], button[title*="audio"]').first
+                if ab.is_visible(timeout=800):
+                    ab.click(timeout=1500)
+                    time.sleep(1.0)
+                    return {"success": True, "type": "audio_challenge", "message": "Активирована аудио-капча"}
+            except Exception:
+                pass
+
+        # 5. Generic submit on sorry pages
+        try:
+            sb = page.locator('input[type="submit"], button[type="submit"]').first
+            if sb.is_visible(timeout=800):
+                sb.click(timeout=1500)
+                time.sleep(1.0)
+                return {"success": True, "type": "submit", "message": "Отправлена форма проверки"}
+        except Exception:
+            pass
+
+        return {"success": False, "message": "Активные элементы капчи не обнаружены"}
+
     def _smooth_mouse_move(self, page, from_x: int, from_y: int, to_x: int, to_y: int, steps: int = 12):
         """Move mouse smoothly from one point to another with curved trajectory."""
         import math, random
@@ -155,13 +242,18 @@ class BrowserManager:
             p_ctx = sync_playwright()
             playwright_instance = p_ctx.start()
 
-            # Launch Chromium in headless mode with high performance flags
+            # Launch Chromium with anti-bot evasion & stealth flags
             launch_args = [
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
-                "--hide-scrollbars"
+                "--hide-scrollbars",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-features=IsolateOrigins,site-per-process",
+                "--disable-infobars",
+                "--window-size=1280,800",
+                "--lang=ru-RU,ru"
             ]
 
             browser = None
@@ -170,7 +262,8 @@ class BrowserManager:
                     browser = playwright_instance.chromium.launch(
                         channel="chrome",
                         headless=True,
-                        args=launch_args
+                        args=launch_args,
+                        ignore_default_args=["--enable-automation"]
                     )
                 except Exception as c_err:
                     logging.warning(f"Failed to launch system Google Chrome, falling back: {c_err}")
@@ -178,12 +271,64 @@ class BrowserManager:
             if browser is None:
                 browser = playwright_instance.chromium.launch(
                     headless=True,
-                    args=launch_args
+                    args=launch_args,
+                    ignore_default_args=["--enable-automation"]
                 )
             context = browser.new_context(
                 viewport=self.viewport_size,
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 NonRoot-Agent/1.1.0"
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                locale="ru-RU",
+                timezone_id="Europe/Moscow",
+                color_scheme="dark",
+                device_scale_factor=1
             )
+
+            # Deep stealth JavaScript spoofing to eliminate automation footprint
+            stealth_js = """
+            // 1. Remove webdriver property
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            try { delete navigator.__proto__.webdriver; } catch(e){}
+
+            // 2. Mock chrome runtime object
+            window.chrome = {
+                app: { isInstalled: false },
+                runtime: { OnInstalledReason: {}, OnRestartRequiredReason: {}, PlatformArch: {}, PlatformNaclArch: {}, PlatformOs: {}, RequestUpdateCheckStatus: {} },
+                csi: function(){},
+                loadTimes: function(){}
+            };
+
+            // 3. Mock languages
+            Object.defineProperty(navigator, 'languages', { get: () => ['ru-RU', 'ru', 'en-US', 'en'] });
+            Object.defineProperty(navigator, 'language', { get: () => 'ru-RU' });
+
+            // 4. Mock plugins & mimeTypes
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [
+                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+                    { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
+                ]
+            });
+
+            // 5. Mock permissions
+            const origQuery = window.navigator.permissions && window.navigator.permissions.query;
+            if (origQuery) {
+                window.navigator.permissions.query = (params) => (
+                    params.name === 'notifications' ? Promise.resolve({ state: Notification.permission }) : origQuery(params)
+                );
+            }
+
+            // 6. Mock WebGL vendor & renderer
+            try {
+                const getParam = WebGLRenderingContext.prototype.getParameter;
+                WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                    if (parameter === 37445) return 'Google Inc. (Apple)';
+                    if (parameter === 37446) return 'ANGLE (Apple, Apple M1, OpenGL 4.1)';
+                    return getParam.apply(this, arguments);
+                };
+            } catch(e){}
+            """
+            context.add_init_script(stealth_js)
             page = context.new_page()
 
             while self.is_running:
@@ -202,8 +347,12 @@ class BrowserManager:
                         self._emit_state(is_loading=True)
                         self._emit_cursor(x=self.viewport_size["width"] // 2, y=60, action=f"Переход на {url}")
 
-                        page.goto(url, timeout=args.get("timeout_ms", 30000), wait_until="domcontentloaded")
-                        time.sleep(0.3)
+                        try:
+                            page.goto(url, timeout=args.get("timeout_ms", 30000), wait_until="load")
+                        except Exception:
+                            page.goto(url, timeout=args.get("timeout_ms", 30000), wait_until="domcontentloaded")
+                        time.sleep(1.0)
+                        self._auto_dismiss_consent(page)
 
                         self.current_url = page.url
                         self.current_title = page.title() or url
@@ -375,6 +524,31 @@ class BrowserManager:
                         content = page.content()
                         res = {"success": True, "html": content}
 
+                    elif action == "evaluate_js":
+                        script = args.get("script", "")
+                        js_arg = args.get("arg", None)
+                        eval_res = page.evaluate(script, js_arg)
+                        res = {"success": True, "result": eval_res}
+
+
+                    elif action == "solve_captcha":
+                        self._emit_cursor(x=self.cursor_pos["x"], y=self.cursor_pos["y"], action="Обход капчи...")
+                        solve_info = self._solve_captcha_worker(page)
+                        time.sleep(1.0)
+                        self._auto_dismiss_consent(page)
+                        self.current_url = page.url
+                        self.current_title = page.title() or ""
+                        shot = page.screenshot(type="jpeg", quality=80)
+                        self.last_screenshot_b64 = "data:image/jpeg;base64," + base64.b64encode(shot).decode("utf-8")
+                        self._emit_state()
+                        res = {
+                            "success": solve_info.get("success", False),
+                            "message": solve_info.get("message", ""),
+                            "type": solve_info.get("type", "unknown"),
+                            "url": self.current_url,
+                            "title": self.current_title,
+                            "screenshot_b64": self.last_screenshot_b64
+                        }
 
                     elif action == "key_press":
                         key = args.get("key", "Enter")
@@ -458,6 +632,9 @@ class BrowserManager:
         return self._dispatch_command("screenshot", {"full_page": full_page}, timeout=20.0)
 
 
+    def solve_captcha(self) -> Dict[str, Any]:
+        return self._dispatch_command("solve_captcha", {}, timeout=25.0)
+
     def key_press(self, key: str) -> Dict[str, Any]:
         return self._dispatch_command("key_press", {"key": key}, timeout=15.0)
 
@@ -466,6 +643,9 @@ class BrowserManager:
 
     def get_html_content(self) -> Dict[str, Any]:
         return self._dispatch_command("get_html", {}, timeout=15.0)
+
+    def evaluate_js(self, script: str, arg: Any = None, timeout: float = 25.0) -> Dict[str, Any]:
+        return self._dispatch_command("evaluate_js", {"script": script, "arg": arg}, timeout=timeout)
 
     def get_state(self) -> Dict[str, Any]:
         return {

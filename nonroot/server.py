@@ -379,13 +379,19 @@ class NonRootHTTPHandler(BaseHTTPRequestHandler):
 
         if path == "/api/chat/rollback":
             raw_idx = body.get("index")
-            if raw_idx is not None:
+            user_turn = body.get("user_turn")
+            restored = []
+            if raw_idx is not None or user_turn is not None:
                 try:
-                    idx = int(raw_idx)
-                    active_agent.rollback_to(idx)
-                except Exception:
-                    pass
-            self._send_json({"success": True, "message": "Rolled back successfully"})
+                    idx = int(raw_idx) if raw_idx is not None else 0
+                    restored = active_agent.rollback_to(idx, user_turn=user_turn)
+                except Exception as e:
+                    logging.error(f"Rollback error: {e}")
+            self._send_json({
+                "success": True,
+                "message": "Rolled back successfully",
+                "restored_files": restored
+            })
             return
 
         if path == "/api/workspace/set":

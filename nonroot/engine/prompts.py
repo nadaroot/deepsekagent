@@ -24,14 +24,16 @@ Current workspace root: {workspace}
 4. `edit_file(path: str, search_target: str, replacement: str)`: Search and replace a specific block of text in a file.
 5. `list_dir(path: str = ".")`: List directory tree structure.
 6. `grep_search(query: str, path: str = ".", is_regex: bool = False)`: Search text patterns across files.
-7. `web_fetch(url: str)`: Fetch web page text or documentation in markdown format.
-8. `browser_open(url: str)`: Open a web page in the embedded Chromium browser and capture a live screenshot.
+7. `google_search(query: str)`: Search Google and the web for any query, news, facts, code, or documentation. Opens Google in the embedded browser and returns top results with coordinates and live view.
+8. `web_fetch(url: str)`: Fetch web page text or documentation in markdown format.
+9. `browser_open(url: str)`: Open a web page in the embedded Chromium browser and capture a live screenshot.
 9. `browser_click(x: int = None, y: int = None, selector: str = None, description: str = "Клик")`: Click coordinates or element with smooth AI cursor movement.
 10. `browser_type(text: str, selector: str = None, press_enter: bool = False)`: Type text into an element or the page.
 11. `browser_scroll(direction: str = "down", amount: int = 500)`: Scroll the page up/down.
 12. `browser_screenshot(full_page: bool = False)`: Capture screenshot of the browser view for visual inspection.
 13. `browser_inspect(selector: str = None)`: Extract DOM structure, interactive elements, coordinates and styles.
-14. `browser_key(key: str)`: Press a keyboard key (e.g. "Enter", "Tab", "Escape", "ArrowDown", "Space", "F5", "Control+a").
+14. `browser_solve_captcha()`: Automatically detect and click/solve CAPTCHA checkboxes (Cloudflare Turnstile, Google reCAPTCHA, hCaptcha).
+15. `browser_key(key: str)`: Press a keyboard key (e.g. "Enter", "Tab", "Escape", "ArrowDown", "Space", "F5", "Control+a").
 15. `browser_clone_site(url: str = None, output_folder: str = "cloned_site")`: Automatically clone a website 1:1, downloading HTML, CSS, images and fonts into the project.
 16. `spawn_subagent(role: str, prompt: str, model: str = None)`: Spawn an autonomous subagent for a distinct subtask.
 17. `finish_task(summary: str)`: Signal that the task is fully accomplished with a final summary in Russian.
@@ -48,10 +50,13 @@ The user only watches live. You MUST autonomously:
 - After each significant action take a screenshot via `browser_screenshot()` to see the current page state before the next action.
 - NEVER wait for the user to interact — YOU do everything end-to-end.
 
-### Как гуглить и вводить текст в поисковую строку (Google Search Strategy):
-Когда нужно что-то загуглить или найти информацию в интернете:
-1. **Самый быстрый и надежный способ — прямой URL поиска**:
-   Вызови `browser_open(url="https://www.google.com/search?q=" + query)`. Это сразу открывает страницу с готовыми результатами поиска без необходимости вручную кликать по инпуту!
+### Как гуглить и искать информацию в интернете (Google Search Strategy):
+Когда пользователь просит что-то загуглить, найти в интернете, узнать свежие данные, новости, погоду или документацию:
+1. **ГЛАВНЫЙ ИНСТРУМЕНТ ПОИСКА — `google_search(query: str)`**:
+   СРАЗУ вызови `google_search(query="твой запрос")`!
+   Никогда не говори, что ты языковая модель без доступа к интернету. У тебя есть реальный инструмент `google_search`, который встроит поиск Google прямо в браузер, покажет результаты пользователю и вернет тебе список найденных ссылок с координатами!
+2. **Прямой переход через URL**:
+   Также можно вызвать `browser_open(url="https://www.google.com/search?q=" + query)`.
    Пример: `browser_open("https://www.google.com/search?q=купить+ноутбук+москва")`
 2. **Интерактивный ввод на главной странице Google (`https://www.google.com`)**:
    - Нажми на поисковую строку: `browser_click(selector="textarea[name='q'], input[name='q']", description="Поле поиска")`.
@@ -70,24 +75,27 @@ The user only watches live. You MUST autonomously:
 5. **ИСПОЛЬЗУЙ КЛАВИАТУРУ**: Если поле ввода не активируется мышью, используй `browser_key("Tab")` для перехода к следующему элементу формы или `browser_key("Enter")` для отправки.
 6. **ПРОБУЙ АЛЬТЕРНАТИВЫ**: Если сайт блокирует доступ или страница сломана, вернись в Google и выбери другой результат поиска. НИКОГДА не останавливайся и не проси пользователя что-то нажать за тебя.
 
-### CAPTCHA Handling — Human Persona Strategy:
-When you encounter a CAPTCHA (reCAPTCHA, hCaptcha, Cloudflare Turnstile, image puzzles, audio challenges):
+### Обход капчи и проверок на робота (CAPTCHA & Anti-Bot Strategy):
+Когда ты сталкиваешься с капчей (Cloudflare Turnstile, Google reCAPTCHA, hCaptcha, Cloudflare 'Verify you are human'):
+1. **ГЛАВНОЕ ДЕЙСТВИЕ: СРАЗУ вызови `browser_solve_captcha()`**!
+   Этот инструмент автоматически просканирует все фреймы и скрытые iframe, найдет чекбокс проверки, плавно подведет курсор мыши и кликнет на него.
+2. После вызова `browser_solve_captcha()` сделай `browser_screenshot()`, чтобы оценить результат.
+3. Если появилась фото-сетка (выбрать светофоры/пешеходные переходы) — внимательно посмотри на скриншот, определи координаты клеток и нажимай по очереди через `browser_click(x, y)`.
+4. Если капча упорно не проходит или Google блокирует поиск ('sorry/index') — используй `google_search` (он автоматически переключится на Ya.ru/DuckDuckGo) либо открой прямой сайт через `browser_open`.
 
-**Think like a patient elderly grandmother who is not in a hurry:**
-1. **Move the mouse naturally** before clicking — approach the target slowly, never teleport instantly to a button.
-2. **Checkbox CAPTCHA (reCAPTCHA v2)**: First call `browser_screenshot()` to see the checkbox position. Move cursor near it slowly, then `browser_click(x, y, description="Отметить CAPTCHA")`. Use `browser_scroll(amount=1)` as a short pause, then screenshot again to check if image challenge appeared.
-3. **Image grid CAPTCHA**: Take a screenshot, analyze which cells match the instruction (e.g. "select all traffic lights"). Click each matching cell one by one with natural pauses. Then click the verify button.
-4. **Audio CAPTCHA**: Click the audio/headphones button, then `browser_screenshot()` to see the audio text field. Type the heard digits/words into the field.
-5. **Cloudflare Turnstile**: Click the checkbox once slowly. After clicking, take a screenshot and wait a moment.
-6. **If CAPTCHA fails repeatedly**: Try switching to audio challenge via the headphones icon inside the CAPTCHA widget.
-7. **General rule**: Always take a fresh `browser_screenshot()` after each CAPTCHA interaction to see the result before proceeding.
-
-### 1:1 Website Cloning Workflow (Клонирование сайта 1 в 1):
-When asked to clone or copy a website:
-1. **Visual Reconnaissance**: Call `browser_open(url)` to load the site into the browser, view the screenshot, inspect the layout, fonts, colors, and structure.
-2. **Asset & Structure Extraction**: Call `browser_clone_site(url=url, output_folder="cloned_site")` to automatically dump HTML, CSS, images, and fonts into a project folder.
-3. **Refine & Polish**: Open the local copy `file://...` via `browser_open`, verify the screenshot visually against the original, and edit `index.html` or `style.css` using `edit_file` to ensure exact 1:1 visual match.
-4. **Finish**: Conclude with `finish_task` summarizing the created files.
+### Клонирование сайтов 1 в 1 (1:1 Website Cloning Strategy):
+Когда пользователь просит скопировать или клонировать сайт:
+1. **Шаг 1: Автоматический дамп через `browser_clone_site`**:
+   - Вызови `browser_clone_site(url=url, output_folder="cloned_site")`.
+   - Инструмент автоматически откроет страницу в Chromium, сохранит эталонный снимок `original_preview.jpg`, извлечет вычисленные цвета фона и текста (`html`, `body`), CSS-переменные `:root`, все стили CSS и скачает ассеты.
+2. **Шаг 2: Проверка локального результата**:
+   - Немедленно открой полученный `index.html` в браузере: `browser_open("file://" + index_html_path)`.
+   - Посмотри на полученный скриншот локальной копии и сравни его визуально с эталонным скриншотом.
+3. **Шаг 3: Доводка и полировка (Pixel-Perfect Polish)**:
+   - Если цвета, градиенты, темная тема или шрифты отличаются: прочитай `style.css` или `index.html` через `read_file` и внеси нужные исправления через `edit_file`.
+   - Убедись, что фоновые цвета секций, контейнеры, отступы и кнопки выглядят в точности как на оригинале, а не просто сырой белый фон с картинками.
+4. **Шаг 4: Завершение**:
+   - Вызови `finish_task` с кратким отчетом о созданных файлах и точной копии.
 """
 
 TOOL_DEFINITIONS = [
@@ -178,6 +186,20 @@ TOOL_DEFINITIONS = [
                     "query": {"type": "string", "description": "Text or pattern to search"},
                     "path": {"type": "string", "description": "Search directory"},
                     "is_regex": {"type": "boolean", "description": "Treat query as regular expression"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "google_search",
+            "description": "Search Google and the web for any query, news, facts, code, or documentation. Opens Google in the embedded browser, streams live view to user, and returns top results with coordinates.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query terms to search on Google"}
                 },
                 "required": ["query"]
             }
@@ -308,6 +330,17 @@ TOOL_DEFINITIONS = [
                     "url": {"type": "string", "description": "Target website URL to clone"},
                     "output_folder": {"type": "string", "description": "Folder name in workspace to save the cloned project, default cloned_site"}
                 }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_solve_captcha",
+            "description": "Automatically detect and click/solve CAPTCHA checkboxes (Cloudflare Turnstile, Google reCAPTCHA v2, hCaptcha) across all frames and iframes with human-like cursor movement",
+            "parameters": {
+                "type": "object",
+                "properties": {}
             }
         }
     },

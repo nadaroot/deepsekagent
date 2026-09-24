@@ -15,6 +15,7 @@ from nonroot.engine.deepseek_client import DeepSeekClient
 from nonroot.engine.tools import ToolExecutor
 from nonroot.engine.subagents import SubagentManager
 from nonroot.engine.prompts import SYSTEM_PROMPT_TEMPLATE, TOOL_DEFINITIONS
+from nonroot.engine.file_history import FileHistoryManager
 
 class AutonomousAgent:
     def __init__(
@@ -40,7 +41,8 @@ class AutonomousAgent:
         self.on_event = on_event
 
         self.client = DeepSeekClient(api_base_url=self.api_base_url, api_key=self.api_key, custom_providers=self.custom_providers)
-        self.tool_executor = ToolExecutor(workspace=self.workspace)
+        self.file_history = FileHistoryManager(workspace=self.workspace)
+        self.tool_executor = ToolExecutor(workspace=self.workspace, file_history=self.file_history)
         self.subagent_manager = SubagentManager(
             workspace=self.workspace,
             client=self.client,
@@ -76,13 +78,28 @@ class AutonomousAgent:
         self.is_running = False
         self._emit("status", {"status": "stopped", "message": "Agent execution stopped by user"})
 
-    def rollback_to(self, index: int):
-        """Rolls back the agent message history to the specified index."""
+    def rollback_to(self, index: int, user_turn: Optional[int] = None) -> List[str]:
+        """Rolls back the agent message history and reverts modified/created files."""
         self.stop()
-        if 0 <= index < len(self.messages):
-            self.messages = self.messages[:index]
-        elif index <= 0:
-            self.messages = []
+        user_indices = [i for i, m in enumerate(self.messages) if m.get("role") == "user"]
+
+        if user_turn is not None:
+            target_turn = max(0, int(user_turn))
+        else:
+            target_turn = max(0, index // 2)
+
+        # 1. Rollback filesystem changes
+        restored_files = self.file_history.rollback_to_turn(target_turn)
+
+        # 2. Rollback message history
+        if target_turn < len(user_indices):
+            cutoff = user_indices[target_turn]
+            self.messages = self.messages[:cutoff]
+        elif target_turn == 0 or not self.messages:
+            self._init_system_prompt()
+
+        self._emit("status", {"status": "idle", "message": f"Откат завершен (файлов: {len(restored_files)})"})
+        return restored_files
 
     def confirm_tool(self, approved: bool):
         self._tool_approved = approved
@@ -104,7 +121,8 @@ class AutonomousAgent:
             self.max_steps = kwargs["max_steps"]
         if "workspace" in kwargs:
             self.workspace = Path(kwargs["workspace"]).resolve()
-            self.tool_executor = ToolExecutor(workspace=self.workspace)
+            self.file_history.set_workspace(self.workspace)
+            self.tool_executor = ToolExecutor(workspace=self.workspace, file_history=self.file_history)
             self.subagent_manager.workspace = self.workspace
             self._init_system_prompt()
 
@@ -122,6 +140,9 @@ class AutonomousAgent:
         try:
             self._emit("status", {"status": "thinking", "message": "Planning actions..."})
             
+            user_turn = len([m for m in self.messages if m.get("role") == "user"])
+            self.file_history.set_turn(user_turn)
+
             user_msg = {"role": "user", "content": prompt}
             if images:
                 user_msg["images"] = images
