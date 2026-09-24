@@ -103,23 +103,30 @@ class DeepSeekClient:
                 p_models = p.get("models", [])
                 p_url = p.get("base_url", "").rstrip("/")
                 p_key = p.get("api_key", "").strip()
+                # A custom provider is only active if an API key is explicitly configured,
+                # or if it points to a local server (such as Ollama on localhost)
                 if model in p_models and p_url:
-                    return p_url, (p_key or self.api_key)
+                    if p_key:
+                        return p_url, p_key
+                    elif "localhost" in p_url or "127.0.0.1" in p_url:
+                        return p_url, p_key or self.api_key
+
+        # By default, use local built-in DeepSeek web-proxy
+        self._ensure_endpoint_ready()
         return self.api_base_url, self.api_key
 
     def _ensure_endpoint_ready(self):
         if "127.0.0.1" in self.api_base_url or "localhost" in self.api_base_url:
-            if "9655" in self.api_base_url:
-                if not is_local_port_open(9655):
-                    auto_start_deepseek_proxy(9655)
-            elif "3000" in self.api_base_url:
-                if not is_local_port_open(3000):
-                    if is_local_port_open(9655):
-                        self.api_base_url = "http://127.0.0.1:9655/v1"
-                    else:
-                        auto_start_deepseek_proxy(9655)
-                        if is_local_port_open(9655):
-                            self.api_base_url = "http://127.0.0.1:9655/v1"
+            if is_local_port_open(9655):
+                self.api_base_url = "http://127.0.0.1:9655/v1"
+            elif is_local_port_open(3000):
+                self.api_base_url = "http://127.0.0.1:3000/v1"
+            else:
+                auto_start_deepseek_proxy(9655)
+                if is_local_port_open(9655):
+                    self.api_base_url = "http://127.0.0.1:9655/v1"
+                elif is_local_port_open(3000):
+                    self.api_base_url = "http://127.0.0.1:3000/v1"
 
     def list_models(self) -> List[Dict[str, Any]]:
         self._ensure_endpoint_ready()

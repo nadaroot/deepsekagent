@@ -308,6 +308,8 @@ function createNewChat() {
     saveSessions();
     renderSessionsList();
     loadActiveSession();
+    toggleBrowserSidepanel(false);
+    if (btnToggleBrowser) btnToggleBrowser.classList.add('hidden');
 }
 
 if (btnNewChat) {
@@ -448,6 +450,28 @@ function loadActiveSession() {
             messagesFeed.appendChild(card);
         }
     });
+
+    // Check if current session has any browser activity
+    let hasBrowserActivity = false;
+    if (session && session.messages && Array.isArray(session.messages)) {
+        for (const msg of session.messages) {
+            if (msg.tools && Array.isArray(msg.tools)) {
+                if (msg.tools.some(t => t.name && t.name.startsWith('browser_'))) {
+                    hasBrowserActivity = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (btnToggleBrowser) {
+        if (hasBrowserActivity) {
+            btnToggleBrowser.classList.remove('hidden');
+        } else {
+            btnToggleBrowser.classList.add('hidden');
+            toggleBrowserSidepanel(false);
+        }
+    }
 
     scrollToBottom();
 }
@@ -863,6 +887,7 @@ function handleAgentEvent(evt) {
         case 'tool_start':
             ensureAssistantCard();
             if (evt.name && evt.name.startsWith('browser_')) {
+                if (btnToggleBrowser) btnToggleBrowser.classList.remove('hidden');
                 toggleBrowserSidepanel(true);
             }
             if (evt.name === 'spawn_subagent') {
@@ -2343,7 +2368,6 @@ window.addEventListener('DOMContentLoaded', () => {
     connectSSE();
     loadModelsList();
     fetchAuthStatus();
-    fetchBrowserState();
     setTimeout(() => checkForUpdates(true), 2000);
     setInterval(() => checkForUpdates(true), 15 * 60 * 1000); // Check every 15 minutes
 });

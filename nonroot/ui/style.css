@@ -2154,35 +2154,38 @@ textarea#prompt-input {
 }
 
 .settings-fullscreen-header {
-    height: 56px;
+    height: 70px;
     border-bottom: 1px solid #202026;
     background: #131317;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 24px;
+    padding: 16px 24px 12px 96px;
     flex-shrink: 0;
+    -webkit-app-region: drag;
 }
 
 .settings-header-left {
     display: flex;
     align-items: center;
     gap: 18px;
+    -webkit-app-region: no-drag;
 }
 
 .btn-back-settings {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     background: #1c1c22;
     border: 1px solid #2d2d36;
     border-radius: 6px;
     color: #d4d4d8;
-    padding: 6px 12px;
-    font-size: 12.5px;
+    padding: 7px 14px;
+    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.12s ease;
+    -webkit-app-region: no-drag;
 }
 
 .btn-back-settings:hover {

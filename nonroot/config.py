@@ -12,10 +12,10 @@ from typing import Dict, Any, Optional
 DEFAULT_PROVIDERS = [
     {
         "id": "deepseek_official",
-        "name": "DeepSeek (Официальный)",
+        "name": "DeepSeek (Официальный API)",
         "base_url": "https://api.deepseek.com/v1",
         "api_key": "",
-        "models": ["deepseek-chat", "deepseek-reasoner"]
+        "models": ["deepseek-chat-official", "deepseek-reasoner-official"]
     },
     {
         "id": "openai",
@@ -82,6 +82,18 @@ class ConfigManager:
                 pass
         if "custom_providers" not in cfg or not isinstance(cfg["custom_providers"], list):
             cfg["custom_providers"] = DEFAULT_PROVIDERS
+        else:
+            # Ensure unauthenticated deepseek_official does not capture default free models
+            for p in cfg["custom_providers"]:
+                if p.get("id") == "deepseek_official" and not p.get("api_key", "").strip():
+                    p["models"] = [m for m in p.get("models", []) if m not in ("deepseek-chat", "deepseek-reasoner")]
+                    if not p["models"]:
+                        p["models"] = ["deepseek-chat-official", "deepseek-reasoner-official"]
+
+        # Ensure correct active local proxy port (9655)
+        if cfg.get("api_base_url") in ("http://127.0.0.1:3000/v1", "http://localhost:3000/v1"):
+            cfg["api_base_url"] = "http://127.0.0.1:9655/v1"
+
         return cfg
 
     def save(self):

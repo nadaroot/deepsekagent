@@ -52,8 +52,7 @@ class BrowserManager:
         self.viewport_size = {"width": 1280, "height": 800}
         self._lock = threading.Lock()
 
-        # Start background worker thread
-        self._start_worker()
+        # Worker thread starts lazily upon first command
 
     def _start_worker(self):
         if self.worker_thread and self.worker_thread.is_alive():
@@ -155,17 +154,6 @@ class BrowserManager:
                 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 NonRoot-Agent/1.1.0"
             )
             page = context.new_page()
-
-            # Navigate to default page
-            try:
-                page.goto("https://google.com", timeout=15000)
-                self.current_url = page.url
-                self.current_title = page.title()
-                shot = page.screenshot(type="jpeg", quality=75)
-                self.last_screenshot_b64 = "data:image/jpeg;base64," + base64.b64encode(shot).decode("utf-8")
-                self._emit_state()
-            except Exception:
-                pass
 
             while self.is_running:
                 try:
