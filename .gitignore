@@ -10,3 +10,6 @@ build/
 *.spec
 releases/
 *.bak*
+deepseek-auth*.json
+*.auth.json
+.env
