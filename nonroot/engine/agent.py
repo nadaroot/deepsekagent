@@ -52,6 +52,8 @@ class AutonomousAgent:
             on_event=self._on_subagent_event
         )
 
+        self.current_session_id = "default"
+        self.sessions: Dict[str, List[Dict[str, Any]]] = {}
         self.messages: List[Dict[str, Any]] = []
         self.is_running = False
         self._stop_event = threading.Event()
@@ -61,11 +63,39 @@ class AutonomousAgent:
 
         self._init_system_prompt()
 
-    def _init_system_prompt(self):
+    def _create_initial_messages(self) -> List[Dict[str, Any]]:
         base_prompt = SYSTEM_PROMPT_TEMPLATE.format(workspace=str(self.workspace))
         if self.custom_system_prompt:
             base_prompt += f"\n\n[ADDITIONAL USER INSTRUCTIONS]:\n{self.custom_system_prompt}"
-        self.messages = [{"role": "system", "content": base_prompt}]
+        return [{"role": "system", "content": base_prompt}]
+
+    def _init_system_prompt(self):
+        initial = self._create_initial_messages()
+        self.messages = initial
+        if self.current_session_id:
+            self.sessions[self.current_session_id] = self.messages
+
+    def switch_session(self, session_id: str):
+        if not session_id:
+            return
+        session_id_str = str(session_id)
+        if self.current_session_id and self.current_session_id in self.sessions:
+            self.sessions[self.current_session_id] = self.messages
+        self.current_session_id = session_id_str
+        if self.current_session_id not in self.sessions:
+            self.sessions[self.current_session_id] = self._create_initial_messages()
+        self.messages = self.sessions[self.current_session_id]
+
+    def delete_session(self, session_id: str):
+        if not session_id:
+            return
+        session_id_str = str(session_id)
+        self.sessions.pop(session_id_str, None)
+        if self.current_session_id == session_id_str:
+            self.current_session_id = "default"
+            if "default" not in self.sessions:
+                self.sessions["default"] = self._create_initial_messages()
+            self.messages = self.sessions["default"]
 
     def _emit(self, event_type: str, data: Dict[str, Any]):
         if self.on_event:

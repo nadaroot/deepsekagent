@@ -237,7 +237,8 @@ class DeepSeekClient:
         model: str = "deepseek-chat",
         temperature: float = 0.2,
         tools: Optional[List[Dict[str, Any]]] = None,
-        images: Optional[List[str]] = None
+        images: Optional[List[str]] = None,
+        session_id: Optional[str] = None
     ) -> Generator[Dict[str, Any], None, None]:
         # Normalize any model alias to working name
         resolved_model = CLIENT_MODEL_ALIASES.get(str(model or "deepseek-chat").strip().lower(), model)
@@ -279,6 +280,8 @@ class DeepSeekClient:
             "temperature": temperature,
             "stream": True
         }
+        if session_id:
+            req_body["session"] = str(session_id)
         if tools:
             req_body["tools"] = tools
 
@@ -288,6 +291,8 @@ class DeepSeekClient:
             "Authorization": f"Bearer {target_api_key}",
             "User-Agent": "NonRoot/1.0"
         }
+        if session_id:
+            headers["X-Agent-Session"] = str(session_id)
 
         try:
             req = urllib.request.Request(url, data=body_bytes, headers=headers, method="POST")
